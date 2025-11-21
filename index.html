@@ -91,6 +91,23 @@
       margin-top: 0.5rem;
       color: #374151;
     }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+    .controls-row label {
+      font-size: 0.9rem;
+    }
+    .controls-row input[type="number"] {
+      width: 100px;
+      padding: 0.25rem 0.4rem;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      font-size: 0.9rem;
+    }
   </style>
 
   <!-- JSZip for creating ZIP files in the browser -->
@@ -100,14 +117,33 @@
   <h1>Batch Image Resizer & Compressor</h1>
   <p>
     Client-side implementation of your Python script:
-    resize images larger than 1800px on a side, convert to JPG, then iteratively compress
-    until the file is ≤ <strong>50%</strong> of the resized size or quality reaches 10.
+    resize images whose width or height exceeds the configured max side length,
+    convert to JPG, then iteratively compress until the file is ≤
+    <strong>50%</strong> of the resized size or quality reaches 10.
   </p>
 
   <div class="card">
     <h2>1. Select Images</h2>
     <p>Supported formats: <strong>.png, .jpg, .jpeg</strong></p>
     <input id="file-input" type="file" multiple accept=".png,.jpg,.jpeg,image/png,image/jpeg" />
+
+    <div class="controls-row">
+      <label for="max-side-input">
+        Max side length (px):
+      </label>
+      <input
+        id="max-side-input"
+        type="number"
+        min="100"
+        max="10000"
+        step="10"
+        value="1800"
+      />
+      <span style="font-size:0.85rem;color:#6b7280;">
+        Images larger than this will be resized so the longest side equals this value.
+      </span>
+    </div>
+
     <div class="file-list" id="file-list"></div>
   </div>
 
@@ -128,14 +164,15 @@
   <script>
     // --- Helpers -------------------------------------------------------------
 
-    const fileInput   = document.getElementById("file-input");
-    const processBtn  = document.getElementById("process-btn");
-    const clearBtn    = document.getElementById("clear-btn");
-    const zipBtn      = document.getElementById("zip-btn");
-    const logEl       = document.getElementById("log");
-    const fileListEl  = document.getElementById("file-list");
-    const downloadsEl = document.getElementById("downloads");
-    const summaryEl   = document.getElementById("summary");
+    const fileInput     = document.getElementById("file-input");
+    const maxSideInput  = document.getElementById("max-side-input");
+    const processBtn    = document.getElementById("process-btn");
+    const clearBtn      = document.getElementById("clear-btn");
+    const zipBtn        = document.getElementById("zip-btn");
+    const logEl         = document.getElementById("log");
+    const fileListEl    = document.getElementById("file-list");
+    const downloadsEl   = document.getElementById("downloads");
+    const summaryEl     = document.getElementById("summary");
 
     let selectedFiles = [];
     let processedResults = [];
@@ -234,9 +271,16 @@
       });
     }
 
-    // Resize according to your rules
-    async function resizeImageBrowser(img) {
-      const maxSide = 1800;
+    // Get max side from UI, with basic validation & fallback
+    function getMaxSide() {
+      const val = parseInt(maxSideInput.value, 10);
+      if (isNaN(val) || val <= 0) return 1800;
+      // Clamp to a reasonable range
+      return Math.min(Math.max(val, 100), 10000);
+    }
+
+    // Resize according to your rules (now configurable maxSide)
+    async function resizeImageBrowser(img, maxSide) {
       let { width, height } = img;
       let newWidth = width;
       let newHeight = height;
@@ -323,13 +367,16 @@
     processBtn.addEventListener("click", async () => {
       if (selectedFiles.length === 0) return;
 
+      const maxSide = getMaxSide();
+      log(`Using max side length: ${maxSide}px`);
+
       processBtn.disabled = true;
       clearBtn.disabled = true;
       zipBtn.disabled = true;
       downloadsEl.innerHTML = "";
       processedResults = [];
       summaryEl.textContent = "";
-      logEl.textContent = "";
+      logEl.textContent = logEl.textContent; // keep previous logs about selection
       log(`Starting processing of ${selectedFiles.length} image(s)...`);
 
       let totalOriginal = 0;
@@ -352,7 +399,7 @@
             height,
             newWidth,
             newHeight
-          } = await resizeImageBrowser(img);
+          } = await resizeImageBrowser(img, maxSide);
 
           const resizedKB = bytesToKB(resizedBlob.size);
           if (resized) {
@@ -449,7 +496,6 @@
         a.click();
         a.remove();
 
-        // Revoke URL after a short delay
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       } catch (err) {
         log(`Error creating ZIP: ${err.message || err}`);
