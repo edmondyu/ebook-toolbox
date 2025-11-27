@@ -277,9 +277,15 @@
       </p>
 
       <div class="card" style="margin-top:1rem;">
-        <h3>1. Select HTML Files & Tags to Preserve</h3>
-        <p>You can select one or more HTML files:</p>
-        <input id="html-file-input" type="file" multiple accept=".html,.htm,text/html" />
+        <h3>1. Select HTML/XHTML Files & Tags to Preserve</h3>
+        <p>You can select one or more files, and you can repeat the selection to add more.</p>
+        <!-- NOTE: multiple + accept now includes .xhtml -->
+        <input
+          id="html-file-input"
+          type="file"
+          multiple
+          accept=".html,.htm,.xhtml,text/html,application/xhtml+xml"
+        />
 
         <div class="controls-row">
           <span style="font-size:0.9rem;">Preserve tags (inline):</span>
@@ -710,6 +716,7 @@
     const htmlSummaryEl       = document.getElementById("html-summary");
     const tagCheckboxes       = document.querySelectorAll(".tag-preserve-checkbox");
 
+    // Now supports aggregating files across multiple selections
     let selectedHtmlFiles = [];
 
     function htmlLog(message) {
@@ -719,20 +726,50 @@
 
     htmlFileInput.addEventListener("change", () => {
       const files = Array.from(htmlFileInput.files || []);
-      selectedHtmlFiles = files;
+
+      if (files.length === 0) {
+        if (selectedHtmlFiles.length === 0) {
+          processHtmlBtn.disabled = true;
+          htmlLog("No HTML/XHTML files selected.");
+        }
+        return;
+      }
+
+      // Add new files, avoid duplicates (by name+size)
+      const existingKey = f => `${f.name}:${f.size}`;
+      const currentKeys = new Set(selectedHtmlFiles.map(existingKey));
+
+      let addedCount = 0;
+      for (const f of files) {
+        const key = existingKey(f);
+        if (!currentKeys.has(key)) {
+          selectedHtmlFiles.push(f);
+          currentKeys.add(key);
+          addedCount++;
+        }
+      }
+
+      // Clear the native selection so user can open dialog again to add more
+      htmlFileInput.value = "";
+
       htmlDownloadsEl.innerHTML = "";
       htmlSummaryEl.textContent = "";
       htmlLogEl.textContent = "";
 
-      if (files.length === 0) {
+      if (selectedHtmlFiles.length === 0) {
         processHtmlBtn.disabled = true;
-        htmlLog("No HTML files selected.");
+        htmlLog("No HTML/XHTML files selected.");
         return;
       }
 
       processHtmlBtn.disabled = false;
-      htmlLog(`Selected ${files.length} HTML file(s):`);
-      files.forEach(f => htmlLog(" • " + f.name));
+      htmlLog(`Total selected files: ${selectedHtmlFiles.length}`);
+      if (addedCount > 0) {
+        htmlLog(`Added ${addedCount} new file(s):`);
+        selectedHtmlFiles.slice(-addedCount).forEach(f => htmlLog(" • " + f.name));
+      } else {
+        htmlLog("No new files added (duplicates ignored).");
+      }
     });
 
     clearHtmlBtn.addEventListener("click", () => {
@@ -814,6 +851,7 @@
           const text = await readFileAsText(file);
 
           const parser = new DOMParser();
+          // This works for HTML and XHTML; browser will normalize DOM
           const doc = parser.parseFromString(text, "text/html");
 
           const selector = "h1,h2,h3,h4,h5,h6,p,footer,sup,small,b,i,u,img";
@@ -907,7 +945,7 @@
           `Processed ${totalFiles} file(s). ` +
           `Total ${totalLines} content line(s) and ${totalImages} image filename(s).`;
 
-        htmlLog("\nAll HTML files processed.");
+        htmlLog("\nAll HTML/XHTML files processed.");
       } catch (err) {
         htmlLog("Error processing HTML: " + (err.message || err));
         alert("Error: " + (err.message || err));
