@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Extract Text from HTML – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #f5f5f5;
+      color: #111827;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+    }
+    button.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    input[type="file"] {
+      margin: 0.75rem 0;
+    }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+    .tag-checkboxes label {
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-right: 0.75rem;
+      margin-bottom: 0.25rem;
+    }
+    .hint {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+    .file-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .file-item:last-child {
+      border-bottom: none;
+    }
+    a.download-link {
+      font-size: 0.85rem;
+      text-decoration: none;
+      color: #2563eb;
+      margin-left: 0.7rem;
+    }
+    .summary {
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+      color: #374151;
+    }
+    .log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 1rem;
+      border-radius: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+    a.back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: #2563eb;
+    }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">← Back to Toolbox</a>
+  <h1>Extract Text from HTML</h1>
+  <p class="subtitle">
+    Extract structured text from HTML/XHTML files. All processing is done locally.
+  </p>
+
+  <div class="card">
+    <h2>1. Select HTML/XHTML Files & Tags to Preserve</h2>
+    <p>You can select one or more files, and you can repeat the selection to add more.</p>
+    <input
+      id="html-file-input"
+      type="file"
+      multiple
+      accept=".html,.htm,.xhtml,text/html,application/xhtml+xml"
+    />
+
+    <div class="controls-row">
+      <span style="font-size:0.9rem;">Preserve tags (inline):</span>
+    </div>
+    <div class="controls-row tag-checkboxes">
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="b" checked> &lt;b&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="i" checked> &lt;i&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="u" checked> &lt;u&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="strong"> &lt;strong&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="em"> &lt;em&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="sup"> &lt;sup&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="sub"> &lt;sub&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="small"> &lt;small&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="a"> &lt;a&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="code"> &lt;code&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="span"> &lt;span&gt;</label>
+    </div>
+    <p class="hint">
+      Only checked tags will be preserved as HTML in the output. All other tags are removed but their text is kept.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>2. Extract & Download</h2>
+    <button id="process-html-btn" class="primary" disabled>Extract Text</button>
+    <button id="clear-html-btn" class="secondary">Clear</button>
+
+    <p class="summary" id="html-summary"></p>
+    <div id="html-downloads"></div>
+  </div>
+
+  <div class="card">
+    <h2>Logs</h2>
+    <div class="log" id="html-log"></div>
+  </div>
+
+  <script>
+    const htmlFileInput       = document.getElementById("html-file-input");
+    const processHtmlBtn      = document.getElementById("process-html-btn");
+    const clearHtmlBtn        = document.getElementById("clear-html-btn");
+    const htmlLogEl           = document.getElementById("html-log");
+    const htmlDownloadsEl     = document.getElementById("html-downloads");
+    const htmlSummaryEl       = document.getElementById("html-summary");
+    const tagCheckboxes       = document.querySelectorAll(".tag-preserve-checkbox");
+
+    let selectedHtmlFiles = [];
+
+    function htmlLog(message) {
+      htmlLogEl.textContent += message + "\n";
+      htmlLogEl.scrollTop = htmlLogEl.scrollHeight;
+    }
+
+    htmlFileInput.addEventListener("change", () => {
+      const files = Array.from(htmlFileInput.files || []);
+
+      if (files.length === 0) {
+        if (selectedHtmlFiles.length === 0) {
+          processHtmlBtn.disabled = true;
+          htmlLog("No HTML/XHTML files selected.");
+        }
+        return;
+      }
+
+      const existingKey = f => `${f.name}:${f.size}`;
+      const currentKeys = new Set(selectedHtmlFiles.map(existingKey));
+
+      let addedCount = 0;
+      for (const f of files) {
+        const key = existingKey(f);
+        if (!currentKeys.has(key)) {
+          selectedHtmlFiles.push(f);
+          currentKeys.add(key);
+          addedCount++;
+        }
+      }
+
+      htmlFileInput.value = "";
+
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+
+      if (selectedHtmlFiles.length === 0) {
+        processHtmlBtn.disabled = true;
+        htmlLog("No HTML/XHTML files selected.");
+        return;
+      }
+
+      processHtmlBtn.disabled = false;
+      htmlLog(`Total selected files: ${selectedHtmlFiles.length}`);
+      if (addedCount > 0) {
+        htmlLog(`Added ${addedCount} new file(s):`);
+        selectedHtmlFiles.slice(-addedCount).forEach(f => htmlLog(" • " + f.name));
+      } else {
+        htmlLog("No new files added (duplicates ignored).");
+      }
+    });
+
+    clearHtmlBtn.addEventListener("click", () => {
+      selectedHtmlFiles = [];
+      htmlFileInput.value = "";
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+      processHtmlBtn.disabled = true;
+    });
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = err => reject(err);
+        reader.readAsText(file, "utf-8");
+      });
+    }
+
+    function cleanPreservingSelected(html, preserveSet) {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = html;
+
+      function unwrapOthers(node) {
+        const children = Array.from(node.childNodes);
+        for (const child of children) {
+          if (child.nodeType === Node.ELEMENT_NODE) {
+            const tag = child.tagName.toLowerCase();
+            if (!preserveSet.has(tag)) {
+              unwrapOthers(child);
+              while (child.firstChild) {
+                node.insertBefore(child.firstChild, child);
+              }
+              node.removeChild(child);
+            } else {
+              unwrapOthers(child);
+            }
+          }
+        }
+      }
+
+      unwrapOthers(wrapper);
+      return wrapper.innerHTML.trim();
+    }
+
+    processHtmlBtn.addEventListener("click", async () => {
+      if (selectedHtmlFiles.length === 0) return;
+
+      processHtmlBtn.disabled = true;
+      clearHtmlBtn.disabled = true;
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+
+      const preserveSet = new Set(
+        Array.from(tagCheckboxes)
+          .filter(cb => cb.checked)
+          .map(cb => cb.value.toLowerCase())
+      );
+
+      if (preserveSet.size === 0) {
+        htmlLog("Warning: no tags selected to preserve – output will be plain text only.");
+      } else {
+        htmlLog("Preserving tags: " + Array.from(preserveSet).map(t => "<" + t + ">").join(", "));
+      }
+
+      let totalFiles = 0;
+      let totalLines = 0;
+      let totalImages = 0;
+
+      try {
+        for (const file of selectedHtmlFiles) {
+          htmlLog(`\nProcessing file: ${file.name}`);
+          const text = await readFileAsText(file);
+
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, "text/html");
+
+          const selector = "h1,h2,h3,h4,h5,h6,p,footer,sup,small,b,i,u,img";
+          const elements = Array.from(doc.querySelectorAll(selector));
+
+          let mainLines = [];
+          let imageFilenames = [];
+
+          elements.forEach(el => {
+            const tag = el.tagName.toLowerCase();
+
+            if (tag === "img") {
+              const src = el.getAttribute("src");
+              if (src) {
+                const parts = src.split(/[\\/]/);
+                const filename = parts[parts.length - 1];
+                imageFilenames.push(filename);
+                mainLines.push(`[${filename}]`);
+              }
+            } else if (["h1","h2","h3","h4","h5","h6"].includes(tag)) {
+              mainLines.push(el.outerHTML);
+            } else {
+              const innerHtml = el.innerHTML;
+              if (!innerHtml || !innerHtml.trim()) return;
+              const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
+              if (!cleanedInner) return;
+
+              let line;
+              if (preserveSet.has(tag)) {
+                line = `<${tag}>${cleanedInner}</${tag}>`;
+              } else {
+                line = cleanedInner;
+              }
+              mainLines.push(line);
+            }
+          });
+
+          const mainText = mainLines.join("\n");
+          const imagesText = imageFilenames.join("\n");
+
+          totalFiles += 1;
+          totalLines += mainLines.length;
+          totalImages += imageFilenames.length;
+
+          const baseName = file.name.replace(/\.[^.]+$/, "");
+          const mainBlob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
+          const imgBlob  = new Blob([imagesText], { type: "text/plain;charset=utf-8" });
+
+          const mainUrl = URL.createObjectURL(mainBlob);
+          const imgUrl  = URL.createObjectURL(imgBlob);
+
+          const mainRow = document.createElement("div");
+          mainRow.className = "file-item";
+          const mainLeft = document.createElement("div");
+          mainLeft.textContent = `${baseName}.txt`;
+          const mainRight = document.createElement("div");
+          const mainA = document.createElement("a");
+          mainA.href = mainUrl;
+          mainA.download = `${baseName}.txt`;
+          mainA.className = "download-link";
+          mainA.textContent = "Download extracted text";
+          mainRight.appendChild(mainA);
+          mainRow.appendChild(mainLeft);
+          mainRow.appendChild(mainRight);
+
+          const imgRow = document.createElement("div");
+          imgRow.className = "file-item";
+          const imgLeft = document.createElement("div");
+          imgLeft.textContent = `${baseName}_image_files.txt`;
+          const imgRight = document.createElement("div");
+          const imgA = document.createElement("a");
+          imgA.href = imgUrl;
+          imgA.download = `${baseName}_image_files.txt`;
+          imgA.className = "download-link";
+          imgA.textContent = "Download image filename list";
+          imgRight.appendChild(imgA);
+          imgRow.appendChild(imgLeft);
+          imgRow.appendChild(imgRight);
+
+          htmlDownloadsEl.appendChild(mainRow);
+          htmlDownloadsEl.appendChild(imgRow);
+
+          htmlLog(
+            `Finished "${file.name}" – ` +
+            `${mainLines.length} content line(s), ${imageFilenames.length} image filename(s).`
+          );
+        }
+
+        htmlSummaryEl.textContent =
+          `Processed ${totalFiles} file(s). ` +
+          `Total ${totalLines} content line(s) and ${totalImages} image filename(s).`;
+
+        htmlLog("\nAll HTML/XHTML files processed.");
+      } catch (err) {
+        htmlLog("Error processing HTML: " + (err.message || err));
+        alert("Error: " + (err.message || err));
+      } finally {
+        clearHtmlBtn.disabled = false;
+        processHtmlBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
