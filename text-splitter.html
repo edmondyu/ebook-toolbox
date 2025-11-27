@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Splitting text file – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #f5f5f5;
+      color: #111827;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+    }
+    button.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    input[type="file"] {
+      margin: 0.75rem 0;
+    }
+    .summary {
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+      color: #374151;
+    }
+    .log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 1rem;
+      border-radius: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+    a.back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: #2563eb;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body>
+  <a class="back" href="index.html">← Back to Toolbox</a>
+  <h1>Splitting text file</h1>
+  <p class="subtitle">
+    Split a text file with <code>[chX]</code> and <code>[break]</code> markers into many files and
+    download them as a ZIP. All processing is done locally.
+  </p>
+
+  <div class="card">
+    <h2>1. Select Text File</h2>
+    <p>Supported formats: <strong>.txt</strong> (UTF-8)</p>
+    <input id="split-file-input" type="file" accept=".txt,text/plain" />
+    <p class="hint">
+      Expected markers inside the text:
+      <code>[ch1]</code>, <code>[ch2]</code>, ..., and <code>[break]</code> for segment breaks.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>2. Split & Download</h2>
+    <button id="split-process-btn" class="primary" disabled>Split & Download ZIP</button>
+    <button id="split-clear-btn" class="secondary">Clear</button>
+    <p class="summary" id="split-summary"></p>
+  </div>
+
+  <div class="card">
+    <h2>Logs</h2>
+    <div class="log" id="split-log"></div>
+  </div>
+
+  <script>
+    const splitFileInput   = document.getElementById("split-file-input");
+    const splitProcessBtn  = document.getElementById("split-process-btn");
+    const splitClearBtn    = document.getElementById("split-clear-btn");
+    const splitLogEl       = document.getElementById("split-log");
+    const splitSummaryEl   = document.getElementById("split-summary");
+
+    let selectedSplitFile = null;
+
+    function splitLog(message) {
+      splitLogEl.textContent += message + "\n";
+      splitLogEl.scrollTop = splitLogEl.scrollHeight;
+    }
+
+    splitFileInput.addEventListener("change", () => {
+      const file = splitFileInput.files && splitFileInput.files[0];
+      selectedSplitFile = file || null;
+      splitSummaryEl.textContent = "";
+      splitLogEl.textContent = "";
+
+      if (!file) {
+        splitProcessBtn.disabled = true;
+        splitLog("No text file selected.");
+        return;
+      }
+
+      splitProcessBtn.disabled = false;
+      splitLog(`Selected text file: ${file.name}`);
+    });
+
+    splitClearBtn.addEventListener("click", () => {
+      selectedSplitFile = null;
+      splitFileInput.value = "";
+      splitSummaryEl.textContent = "";
+      splitLogEl.textContent = "";
+      splitProcessBtn.disabled = true;
+    });
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = err => reject(err);
+        reader.readAsText(file, "utf-8");
+      });
+    }
+
+    function splitFileTextByChapterAndBreak(text) {
+      const parts = text.split(/\[break\]/);
+      const chapterPattern = /\[ch(\d+)\]/g;
+
+      let currentChapter = null;
+      let fileCount = 0;
+      const results = [];
+
+      for (let rawPart of parts) {
+        if (!rawPart) continue;
+
+        chapterPattern.lastIndex = 0;
+        const match = chapterPattern.exec(rawPart);
+        if (match) {
+          currentChapter = match[1];
+          fileCount = 0;
+          rawPart = rawPart.replace(chapterPattern, "");
+        }
+
+        if (currentChapter) {
+          const trimmed = rawPart.trim();
+          if (!trimmed) continue;
+
+          const fileName = `ch${currentChapter}-${String(fileCount).padStart(3, "0")}.txt`;
+          results.push({ name: fileName, content: trimmed });
+          fileCount += 1;
+        }
+      }
+
+      return results;
+    }
+
+    splitProcessBtn.addEventListener("click", async () => {
+      if (!selectedSplitFile) return;
+
+      splitProcessBtn.disabled = true;
+      splitClearBtn.disabled = true;
+      splitSummaryEl.textContent = "";
+      splitLogEl.textContent = "";
+
+      splitLog(`Reading file "${selectedSplitFile.name}"...`);
+
+      try {
+        const text = await readFileAsText(selectedSplitFile);
+        splitLog("File loaded. Splitting by [chX] and [break] markers...");
+
+        const pieces = splitFileTextByChapterAndBreak(text);
+
+        if (pieces.length === 0) {
+          splitLog("No split segments found. Maybe missing [chX] / [break] markers?");
+          alert("No segments generated. Check that your file contains [chX] and [break] markers.");
+          splitProcessBtn.disabled = false;
+          splitClearBtn.disabled = false;
+          return;
+        }
+
+        splitLog(`Generated ${pieces.length} split file(s). Creating ZIP...`);
+
+        const zip = new JSZip();
+        pieces.forEach(piece => {
+          zip.file(piece.name, piece.content);
+        });
+
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+
+        const baseName = selectedSplitFile.name.replace(/\.[^.]+$/, "");
+        const zipName = `${baseName}_split.zip`;
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = zipName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+        splitSummaryEl.textContent =
+          `Done. Created ${pieces.length} text file(s) and downloaded as "${zipName}".`;
+        splitLog("ZIP created and download triggered.");
+
+      } catch (err) {
+        splitLog("Error splitting text: " + (err.message || err));
+        alert("Error: " + (err.message || err));
+      } finally {
+        splitProcessBtn.disabled = false;
+        splitClearBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
