@@ -136,13 +136,26 @@
       accept=".html,.htm,.xhtml,text/html,application/xhtml+xml"
     />
 
-    <!-- NEW: show selected source files -->
+    <!-- show selected source files -->
     <div id="html-file-list" class="file-list"></div>
 
     <div class="controls-row">
-      <span style="font-size:0.9rem;">Preserve tags (inline):</span>
+      <span style="font-size:0.9rem;">Preserve tags:</span>
     </div>
+
+    <!-- NEW: header tags h1–h6 added as options -->
     <div class="controls-row tag-checkboxes">
+      <!-- Headers -->
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h1" checked> &lt;h1&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h2" checked> &lt;h2&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h3" checked> &lt;h3&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h4" checked> &lt;h4&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h5" checked> &lt;h5&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h6" checked> &lt;h6&gt;</label>
+    </div>
+
+    <div class="controls-row tag-checkboxes">
+      <!-- Inline / formatting tags -->
       <label><input type="checkbox" class="tag-preserve-checkbox" value="b" checked> &lt;b&gt;</label>
       <label><input type="checkbox" class="tag-preserve-checkbox" value="i" checked> &lt;i&gt;</label>
       <label><input type="checkbox" class="tag-preserve-checkbox" value="u" checked> &lt;u&gt;</label>
@@ -155,8 +168,10 @@
       <label><input type="checkbox" class="tag-preserve-checkbox" value="code"> &lt;code&gt;</label>
       <label><input type="checkbox" class="tag-preserve-checkbox" value="span"> &lt;span&gt;</label>
     </div>
+
     <p class="hint">
       Only checked tags will be preserved as HTML in the output. All other tags are removed but their text is kept.
+      For headings, unchecking &lt;h1&gt;–&lt;h6&gt; will downgrade them to plain text.
     </p>
   </div>
 
@@ -187,8 +202,7 @@
     const htmlFileListEl      = document.getElementById("html-file-list");
 
     let selectedHtmlFiles = [];
-    // store all generated outputs for ZIP: {name, blob}
-    let generatedOutputs = [];
+    let generatedOutputs = []; // {name, blob}
 
     function htmlLog(message) {
       htmlLogEl.textContent += message + "\n";
@@ -246,10 +260,8 @@
         }
       }
 
-      // allow user to re-open dialog and add more files
       htmlFileInput.value = "";
 
-      // reset outputs/logs when input changes
       htmlDownloadsEl.innerHTML = "";
       htmlSummaryEl.textContent = "";
       htmlLogEl.textContent = "";
@@ -374,11 +386,13 @@
                 imageFilenames.push(filename);
                 mainLines.push(`[${filename}]`);
               }
-            } else if (["h1","h2","h3","h4","h5","h6"].includes(tag)) {
-              mainLines.push(el.outerHTML);
-            } else {
+              return;
+            }
+
+            if (["h1","h2","h3","h4","h5","h6"].includes(tag)) {
               const innerHtml = el.innerHTML;
               if (!innerHtml || !innerHtml.trim()) return;
+
               const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
               if (!cleanedInner) return;
 
@@ -386,10 +400,24 @@
               if (preserveSet.has(tag)) {
                 line = `<${tag}>${cleanedInner}</${tag}>`;
               } else {
-                line = cleanedInner;
+                line = cleanedInner; // downgrade to plain text
               }
               mainLines.push(line);
+              return;
             }
+
+            const innerHtml = el.innerHTML;
+            if (!innerHtml || !innerHtml.trim()) return;
+            const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
+            if (!cleanedInner) return;
+
+            let line;
+            if (preserveSet.has(tag)) {
+              line = `<${tag}>${cleanedInner}</${tag}>`;
+            } else {
+              line = cleanedInner;
+            }
+            mainLines.push(line);
           });
 
           const mainText = mainLines.join("\n");
@@ -403,7 +431,6 @@
           const mainBlob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
           const imgBlob  = new Blob([imagesText], { type: "text/plain;charset=utf-8" });
 
-          // store in memory for ZIP
           const mainOutName = `${baseName}.txt`;
           const imgOutName  = `${baseName}_image_files.txt`;
           generatedOutputs.push({ name: mainOutName, blob: mainBlob });
@@ -411,7 +438,6 @@
             generatedOutputs.push({ name: imgOutName, blob: imgBlob });
           }
 
-          // also create per-file download links
           const mainUrl = URL.createObjectURL(mainBlob);
           const imgUrl  = URL.createObjectURL(imgBlob);
 
@@ -471,7 +497,6 @@
       }
     });
 
-    // ZIP all outputs
     htmlZipBtn.addEventListener("click", async () => {
       if (generatedOutputs.length === 0) return;
 
