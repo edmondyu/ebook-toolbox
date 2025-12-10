@@ -2,871 +2,648 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>HTML Text Extractor</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Extract Text from HTML – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root {
-      color-scheme: light dark;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
     body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
-      background: #0f172a;
-      color: #e5e7eb;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem 1rem;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #f5f5f5;
+      color: #111827;
     }
-
-    .app {
-      width: 100%;
-      max-width: 1100px;
-      background: rgba(15, 23, 42, 0.95);
-      border-radius: 1.5rem;
-      padding: 1.75rem;
-      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      backdrop-filter: blur(18px);
-    }
-
     h1 {
-      margin: 0 0 0.25rem;
-      font-size: 1.6rem;
-      letter-spacing: 0.03em;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
+      margin-top: 0;
+      margin-bottom: 0.25rem;
     }
-
-    h1 span.logo {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 1.9rem;
-      height: 1.9rem;
-      border-radius: 0.9rem;
-      background: radial-gradient(circle at 0 0, #38bdf8, #6366f1);
-      font-size: 1.1rem;
-    }
-
     .subtitle {
-      margin: 0 0 1.25rem;
-      font-size: 0.9rem;
-      color: #9ca3af;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr);
-      gap: 1.25rem;
-    }
-
-    @media (max-width: 900px) {
-      .grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-    }
-
-    .panel {
-      border-radius: 1rem;
-      padding: 1.1rem 1.1rem 1rem;
-      background: radial-gradient(circle at top left, #1f2937, #020617 60%);
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      min-height: 120px;
-    }
-
-    .panel h2 {
-      margin: 0 0 0.75rem;
-      font-size: 1rem;
-      color: #e5e7eb;
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .panel h2 span.badge {
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      padding: 0.15rem 0.45rem;
-      border-radius: 999px;
-      background: rgba(15, 118, 110, 0.2);
-      color: #6ee7b7;
-      border: 1px solid rgba(45, 212, 191, 0.35);
-    }
-
-    .file-drop {
-      border-radius: 0.9rem;
-      border: 1px dashed rgba(148, 163, 184, 0.7);
-      background: rgba(15, 23, 42, 0.7);
-      padding: 1.1rem;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.15s ease, background 0.15s ease,
-        transform 0.1s ease;
-      font-size: 0.9rem;
-      color: #9ca3af;
-    }
-
-    .file-drop strong {
-      color: #e5e7eb;
-    }
-
-    .file-drop.dragover {
-      border-color: #38bdf8;
-      background: rgba(15, 23, 42, 0.95);
-      transform: translateY(-1px);
-    }
-
-    .file-drop input {
-      display: none;
-    }
-
-    .hint {
-      font-size: 0.75rem;
+      margin-top: 0;
+      margin-bottom: 1.5rem;
       color: #6b7280;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+    }
+    button.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    input[type="file"] {
+      margin: 0.75rem 0;
+    }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
       margin-top: 0.5rem;
     }
-
-    .options {
-      margin-top: 0.85rem;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 0.5rem;
-      font-size: 0.8rem;
-      color: #d1d5db;
-    }
-
-    .option-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.5rem 1rem;
-    }
-
-    .checkbox-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.65rem 1.2rem;
-    }
-
-    label.inline {
+    .tag-checkboxes label {
+      font-size: 0.85rem;
       display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
-      cursor: pointer;
+      gap: 0.25rem;
+      margin-right: 0.75rem;
+      margin-bottom: 0.25rem;
     }
-
-    input[type="checkbox"] {
-      width: 0.9rem;
-      height: 0.9rem;
-      border-radius: 0.25rem;
-      border: 1px solid rgba(156, 163, 175, 0.8);
-      background: #020617;
-      accent-color: #38bdf8;
-    }
-
-    input[type="text"] {
-      background: #020617;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.7);
-      padding: 0.4rem 0.7rem;
-      font-size: 0.78rem;
-      color: #e5e7eb;
-      min-width: 0;
-    }
-
-    input[type="text"]::placeholder {
+    .hint {
+      font-size: 0.85rem;
       color: #6b7280;
     }
-
-    .small-label {
-      font-size: 0.78rem;
-      color: #9ca3af;
+    .file-list {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
     }
-
-    .merge-name-wrapper {
+    .file-item {
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.4rem;
-    }
-
-    .controls {
-      margin-top: 0.8rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      align-items: center;
       justify-content: space-between;
-    }
-
-    .left-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
       align-items: center;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid #e5e7eb;
     }
-
-    button {
-      border-radius: 999px;
-      border: none;
-      cursor: pointer;
-      padding: 0.45rem 0.95rem;
-      font-size: 0.78rem;
-      font-weight: 500;
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      background: linear-gradient(135deg, #38bdf8, #6366f1);
-      color: #0b1120;
-      box-shadow: 0 12px 30px rgba(56, 189, 248, 0.35);
-      transition: transform 0.08s ease, box-shadow 0.08s ease,
-        opacity 0.12s ease, background 0.12s ease;
-    }
-
-    button.secondary {
-      background: rgba(15, 23, 42, 0.9);
-      color: #e5e7eb;
-      border: 1px solid rgba(148, 163, 184, 0.65);
-      box-shadow: none;
-    }
-
-    button:disabled {
-      opacity: 0.4;
-      cursor: default;
-      box-shadow: none;
-      transform: none;
-    }
-
-    button:not(:disabled):hover {
-      transform: translateY(-1px);
-      box-shadow: 0 16px 40px rgba(56, 189, 248, 0.4);
-    }
-
-    button.secondary:not(:disabled):hover {
-      transform: translateY(-1px);
-      box-shadow: 0 12px 26px rgba(15, 23, 42, 0.8);
-      background: rgba(15, 23, 42, 1);
-    }
-
-    button span.key {
-      padding: 0.15rem 0.45rem;
-      border-radius: 999px;
-      border: 1px solid rgba(15, 23, 42, 0.2);
-      background: rgba(15, 23, 42, 0.15);
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-
-    .status {
-      font-size: 0.78rem;
-      color: #9ca3af;
-      display: flex;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .status-dot {
-      width: 0.5rem;
-      height: 0.5rem;
-      border-radius: 999px;
-      background: #4ade80;
-      box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
-    }
-
-    .status-dot.idle {
-      background: #6b7280;
-      box-shadow: none;
-    }
-
-    .status-dot.error {
-      background: #f97373;
-      box-shadow: 0 0 10px rgba(248, 113, 113, 0.6);
-    }
-
-    .results-list {
-      margin-top: 0.25rem;
-      max-height: 380px;
-      overflow: auto;
-      border-radius: 0.7rem;
-      border: 1px solid rgba(31, 41, 55, 0.9);
-      background: radial-gradient(circle at top left, #020617, #020617 55%);
-    }
-
-    .result-empty {
-      padding: 1.1rem;
-      font-size: 0.8rem;
-      color: #6b7280;
-      text-align: center;
-    }
-
-    .result-item {
-      border-bottom: 1px solid rgba(31, 41, 55, 0.9);
-    }
-
-    .result-item:last-child {
+    .file-item:last-child {
       border-bottom: none;
     }
-
-    .result-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.55rem 0.75rem;
-      font-size: 0.8rem;
-      background: rgba(15, 23, 42, 0.9);
+    a.download-link {
+      font-size: 0.85rem;
+      text-decoration: none;
+      color: #2563eb;
+      margin-left: 0.7rem;
     }
-
-    .result-file {
-      font-weight: 500;
-      color: #e5e7eb;
-      word-break: break-all;
+    .summary {
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+      color: #374151;
     }
-
-    .result-meta {
-      font-size: 0.72rem;
-      color: #9ca3af;
-      display: flex;
-      gap: 0.4rem;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-top: 0.15rem;
-    }
-
-    .result-body {
-      padding: 0.55rem 0.75rem 0.65rem;
-    }
-
-    .result-text {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-        "Liberation Mono", "Courier New", monospace;
-      font-size: 0.76rem;
+    .log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       white-space: pre-wrap;
-      max-height: 200px;
-      overflow: auto;
-      padding: 0.55rem 0.55rem;
-      border-radius: 0.55rem;
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid rgba(31, 41, 55, 0.9);
+      background: #111827;
+      color: #e5e7eb;
+      padding: 1rem;
+      border-radius: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+    a.back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: #2563eb;
     }
 
-    .pill {
-      padding: 0.12rem 0.5rem;
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid rgba(55, 65, 81, 0.9);
+    /* small inline styling for merge controls */
+    .merge-label {
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
     }
-
-    .pill.small {
-      font-size: 0.7rem;
-    }
-
-    .badge-soft {
-      font-size: 0.7rem;
-      padding: 0.15rem 0.5rem;
-      border-radius: 999px;
-      border: 1px solid rgba(37, 99, 235, 0.45);
-      background: rgba(37, 99, 235, 0.15);
-      color: #bfdbfe;
-    }
-
-    .hidden {
-      display: none !important;
+    .merge-filename-input {
+      font-size: 0.85rem;
+      padding: 0.35rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      min-width: 200px;
     }
   </style>
+  <!-- JSZip for ZIP creation -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
-  <main class="app">
-    <header>
-      <h1>
-        <span class="logo">H</span>
-        HTML Text Extractor
-      </h1>
-      <p class="subtitle">
-        Drop HTML files, extract cleaned text (with tag-style markers and image
-        hints), and download as plain text — either per file or merged into a
-        single document.
-      </p>
-    </header>
+  <a class="back" href="index.html">← Back to Toolbox</a>
+  <h1>Extract Text from HTML</h1>
+  <p class="subtitle">
+    Extract structured text from HTML/XHTML files. All processing is done locally.
+  </p>
 
-    <section class="grid" aria-label="HTML extractor workspace">
-      <section class="panel" aria-label="Upload & options">
-        <h2>
-          Source HTML
-          <span class="badge">Input</span>
-        </h2>
+  <div class="card">
+    <h2>1. Select HTML/XHTML Files & Tags to Preserve</h2>
+    <p>You can select one or more files, and you can repeat the selection to add more.</p>
+    <input
+      id="html-file-input"
+      type="file"
+      multiple
+      accept=".html,.htm,.xhtml,text/html,application/xhtml+xml"
+    />
 
-        <div
-          class="file-drop"
-          id="file-drop"
-          tabindex="0"
-          role="button"
-          aria-label="Drop HTML files here or click to select"
-        >
-          <input
-            type="file"
-            id="file-input"
-            accept=".html,.htm,.xhtml,.xml"
-            multiple
-          />
-          <div>
-            <strong>Drop HTML files here</strong> or click to browse
-          </div>
-          <div class="hint">
-            We’ll parse each HTML, keep basic structure markers (headings,
-            paragraphs, lists) and add markers for images.
-          </div>
-        </div>
+    <!-- show selected source files -->
+    <div id="html-file-list" class="file-list"></div>
 
-        <div class="options">
-          <div class="option-row">
-            <div class="checkbox-group">
-              <label class="inline" title="Include heading markers like #, ##">
-                <input type="checkbox" id="opt-headings" checked />
-                <span>Preserve headings</span>
-              </label>
+    <div class="controls-row">
+      <span style="font-size:0.9rem;">Preserve tags:</span>
+    </div>
 
-              <label class="inline" title="Include paragraph breaks">
-                <input type="checkbox" id="opt-paragraphs" checked />
-                <span>Preserve paragraphs</span>
-              </label>
+    <!-- Header tags -->
+    <div class="controls-row tag-checkboxes">
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h1" checked> &lt;h1&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h2" checked> &lt;h2&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h3" checked> &lt;h3&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h4" checked> &lt;h4&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h5" checked> &lt;h5&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="h6" checked> &lt;h6&gt;</label>
+    </div>
 
-              <label
-                class="inline"
-                title="Insert markers where images appear (with alt/src)"
-              >
-                <input type="checkbox" id="opt-images" checked />
-                <span>Add image markers</span>
-              </label>
-            </div>
-          </div>
+    <!-- Inline/formatting tags -->
+    <div class="controls-row tag-checkboxes">
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="b" checked> &lt;b&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="i" checked> &lt;i&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="u" checked> &lt;u&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="strong"> &lt;strong&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="em"> &lt;em&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="sup"> &lt;sup&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="sub"> &lt;sub&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="small"> &lt;small&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="a"> &lt;a&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="code"> &lt;code&gt;</label>
+      <label><input type="checkbox" class="tag-preserve-checkbox" value="span"> &lt;span&gt;</label>
+    </div>
 
-          <!-- NEW MERGE OPTION -->
-          <div class="option-row">
-            <label class="inline" title="Download a single merged text file">
-              <input type="checkbox" id="opt-merge" />
-              <span>Merge all extracted text into a single file when downloading</span>
-            </label>
-          </div>
+    <p class="hint">
+      Only checked tags will be preserved as HTML in the output. All other tags are removed but their text is kept.
+      For headings, unchecking &lt;h1&gt;–&lt;h6&gt; will downgrade them to plain text.
+    </p>
+  </div>
 
-          <div class="option-row" id="merge-name-row" class="hidden">
-            <div class="merge-name-wrapper">
-              <span class="small-label">Merged filename:</span>
-              <input
-                type="text"
-                id="merge-filename"
-                value="merged_text.txt"
-                aria-label="Merged output filename"
-              />
-            </div>
-          </div>
-          <!-- END MERGE OPTION -->
-        </div>
+  <div class="card">
+    <h2>2. Extract & Download</h2>
+    <button id="process-html-btn" class="primary" disabled>Extract Text</button>
+    <button id="html-zip-btn" class="secondary" disabled>Download all as ZIP</button>
+    <button id="clear-html-btn" class="secondary">Clear</button>
 
-        <div class="controls">
-          <div class="left-controls">
-            <button id="btn-extract" type="button">
-              Extract text
-              <span class="key">Enter</span>
-            </button>
-            <button
-              id="btn-download"
-              type="button"
-              class="secondary"
-              disabled
-              title="Download extracted text"
-            >
-              Download all
-            </button>
-          </div>
+    <!-- NEW: merge option controls -->
+    <div class="controls-row" style="margin-top:0.75rem;">
+      <label class="merge-label">
+        <input type="checkbox" id="merge-output-toggle" />
+        Merge extracted text into a single file when downloading all
+      </label>
+      <input
+        type="text"
+        id="merge-output-name"
+        class="merge-filename-input"
+        value="merged_text.txt"
+        aria-label="Merged output filename"
+      />
+    </div>
+    <!-- END NEW -->
 
-          <div class="status" id="status">
-            <span class="status-dot idle" id="status-dot"></span>
-            <span id="status-text">Idle — no files yet</span>
-          </div>
-        </div>
-      </section>
+    <p class="summary" id="html-summary"></p>
+    <div id="html-downloads"></div>
+  </div>
 
-      <section class="panel" aria-label="Extracted text preview">
-        <h2>
-          Extracted Text
-          <span class="badge">Preview</span>
-        </h2>
-        <div id="results" class="results-list">
-          <div class="result-empty">
-            No output yet. Drop HTML files and click <strong>Extract text</strong>
-            to see the cleaned content here.
-          </div>
-        </div>
-      </section>
-    </section>
-  </main>
+  <div class="card">
+    <h2>Logs</h2>
+    <div class="log" id="html-log"></div>
+  </div>
 
   <script>
-    // --- Simple extraction with tag markers + image markers ---
+    const htmlFileInput       = document.getElementById("html-file-input");
+    const processHtmlBtn      = document.getElementById("process-html-btn");
+    const clearHtmlBtn        = document.getElementById("clear-html-btn");
+    const htmlZipBtn          = document.getElementById("html-zip-btn");
+    const htmlLogEl           = document.getElementById("html-log");
+    const htmlDownloadsEl     = document.getElementById("html-downloads");
+    const htmlSummaryEl       = document.getElementById("html-summary");
+    const tagCheckboxes       = document.querySelectorAll(".tag-preserve-checkbox");
+    const htmlFileListEl      = document.getElementById("html-file-list");
 
-    const fileDrop = document.getElementById("file-drop");
-    const fileInput = document.getElementById("file-input");
-    const btnExtract = document.getElementById("btn-extract");
-    const btnDownload = document.getElementById("btn-download");
-    const resultsEl = document.getElementById("results");
-    const statusDot = document.getElementById("status-dot");
-    const statusText = document.getElementById("status-text");
+    // NEW: merge controls
+    const mergeOutputToggle   = document.getElementById("merge-output-toggle");
+    const mergeOutputNameInput= document.getElementById("merge-output-name");
 
-    const optHeadings = document.getElementById("opt-headings");
-    const optParagraphs = document.getElementById("opt-paragraphs");
-    const optImages = document.getElementById("opt-images");
-    const optMerge = document.getElementById("opt-merge");
-    const mergeNameRow = document.getElementById("merge-name-row");
-    const mergeFilenameInput = document.getElementById("merge-filename");
+    let selectedHtmlFiles = [];
+    let generatedOutputs = []; // {name, blob}
+    let mergedTextContent = ""; // NEW: combined text across all files
 
-    /** Holds { fileName, text, charCount } per input file */
-    let extractedResults = [];
-    let selectedFiles = [];
+    function htmlLog(message) {
+      htmlLogEl.textContent += message + "\n";
+      htmlLogEl.scrollTop = htmlLogEl.scrollHeight;
+    }
 
-    // --- File input / drag & drop wiring ---
+    function bytesToKB(bytes) {
+      return (bytes / 1024).toFixed(2) + " KB";
+    }
 
-    fileDrop.addEventListener("click", () => fileInput.click());
-    fileDrop.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        fileInput.click();
+    function updateFileListUI() {
+      htmlFileListEl.innerHTML = "";
+      if (selectedHtmlFiles.length === 0) {
+        htmlFileListEl.textContent = "No files selected.";
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      selectedHtmlFiles.forEach(file => {
+        const row = document.createElement("div");
+        row.className = "file-item";
+        const left = document.createElement("span");
+        left.textContent = file.name;
+        const right = document.createElement("span");
+        right.textContent = bytesToKB(file.size);
+        row.appendChild(left);
+        row.appendChild(right);
+        frag.appendChild(row);
+      });
+      htmlFileListEl.appendChild(frag);
+    }
+
+    htmlFileInput.addEventListener("change", () => {
+      const files = Array.from(htmlFileInput.files || []);
+
+      if (files.length === 0) {
+        if (selectedHtmlFiles.length === 0) {
+          processHtmlBtn.disabled = true;
+          htmlZipBtn.disabled = true;
+          htmlLog("No HTML/XHTML files selected.");
+          updateFileListUI();
+        }
+        return;
+      }
+
+      const existingKey = f => `${f.name}:${f.size}`;
+      const currentKeys = new Set(selectedHtmlFiles.map(existingKey));
+
+      let addedCount = 0;
+      for (const f of files) {
+        const key = existingKey(f);
+        if (!currentKeys.has(key)) {
+          selectedHtmlFiles.push(f);
+          currentKeys.add(key);
+          addedCount++;
+        }
+      }
+
+      htmlFileInput.value = "";
+
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+      generatedOutputs = [];
+      mergedTextContent = ""; // NEW: reset merged
+      htmlZipBtn.disabled = true;
+
+      if (selectedHtmlFiles.length === 0) {
+        processHtmlBtn.disabled = true;
+        htmlLog("No HTML/XHTML files selected.");
+        updateFileListUI();
+        return;
+      }
+
+      processHtmlBtn.disabled = false;
+      updateFileListUI();
+
+      htmlLog(`Total selected files: ${selectedHtmlFiles.length}`);
+      if (addedCount > 0) {
+        htmlLog(`Added ${addedCount} new file(s):`);
+        selectedHtmlFiles.slice(-addedCount).forEach(f => htmlLog(" • " + f.name));
+      } else {
+        htmlLog("No new files added (duplicates ignored).");
       }
     });
 
-    fileDrop.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      fileDrop.classList.add("dragover");
+    clearHtmlBtn.addEventListener("click", () => {
+      selectedHtmlFiles = [];
+      generatedOutputs = [];
+      mergedTextContent = ""; // NEW: reset merged
+      htmlFileInput.value = "";
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+      htmlFileListEl.textContent = "No files selected.";
+      processHtmlBtn.disabled = true;
+      htmlZipBtn.disabled = true;
     });
 
-    fileDrop.addEventListener("dragleave", (e) => {
-      e.preventDefault();
-      fileDrop.classList.remove("dragover");
-    });
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = err => reject(err);
+        reader.readAsText(file, "utf-8");
+      });
+    }
 
-    fileDrop.addEventListener("drop", (e) => {
-      e.preventDefault();
-      fileDrop.classList.remove("dragover");
-      handleFiles(e.dataTransfer.files);
-    });
+    // Remove non-preserved tags but keep their text and preserved tags inside
+    function cleanPreservingSelected(html, preserveSet) {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = html;
 
-    fileInput.addEventListener("change", (e) => {
-      handleFiles(e.target.files);
-    });
+      function unwrapOthers(node) {
+        const children = Array.from(node.childNodes);
+        for (const child of children) {
+          if (child.nodeType === Node.ELEMENT_NODE) {
+            const tag = child.tagName.toLowerCase();
+            if (!preserveSet.has(tag)) {
+              unwrapOthers(child);
+              while (child.firstChild) {
+                node.insertBefore(child.firstChild, child);
+              }
+              node.removeChild(child);
+            } else {
+              unwrapOthers(child);
+            }
+          }
+        }
+      }
 
-    function handleFiles(fileList) {
-      selectedFiles = Array.from(fileList).filter((f) =>
-        /\.x?html?$|\.xml$/i.test(f.name)
+      unwrapOthers(wrapper);
+      return wrapper.innerHTML;
+    }
+
+    // Normalize whitespace so pretty HTML formatting doesn't create unwanted line breaks
+    function normalizeHtmlTextLine(line) {
+      let s = line;
+
+      // collapse any sequence of whitespace (spaces, newlines, tabs) into a single space
+      s = s.replace(/\s+/g, " ");
+
+      // remove spaces before punctuation (both CJK and Western)
+      s = s.replace(/\s+([。，、！!？?\.,;:])/g, "$1");
+
+      // trim leading/trailing spaces
+      s = s.trim();
+
+      return s;
+    }
+
+    processHtmlBtn.addEventListener("click", async () => {
+      if (selectedHtmlFiles.length === 0) return;
+
+      processHtmlBtn.disabled = true;
+      clearHtmlBtn.disabled = true;
+      htmlZipBtn.disabled = true;
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+      generatedOutputs = [];
+      mergedTextContent = ""; // NEW: reset merged before processing
+
+      const preserveSet = new Set(
+        Array.from(tagCheckboxes)
+          .filter(cb => cb.checked)
+          .map(cb => cb.value.toLowerCase())
       );
 
-      if (!selectedFiles.length) {
-        setStatus("error", "No HTML/XHTML/XML files detected.");
-        return;
-      }
-
-      setStatus("idle", `${selectedFiles.length} file(s) ready. Click “Extract text”.`);
-      extractedResults = [];
-      renderResults();
-      btnDownload.disabled = true;
-    }
-
-    // --- Status helper ---
-
-    function setStatus(mode, text) {
-      statusText.textContent = text;
-      statusDot.classList.remove("idle", "error");
-      if (mode === "processing") {
-        statusDot.classList.remove("idle", "error");
-      } else if (mode === "error") {
-        statusDot.classList.add("error");
+      if (preserveSet.size === 0) {
+        htmlLog("Warning: no tags selected to preserve – output will be plain text only.");
       } else {
-        statusDot.classList.add("idle");
-      }
-    }
-
-    // --- Extraction core ---
-
-    btnExtract.addEventListener("click", () => {
-      if (!selectedFiles.length) {
-        setStatus("error", "Please select some HTML files first.");
-        return;
-      }
-      extractFromFiles(selectedFiles);
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if ((e.key === "Enter" || e.key === "NumpadEnter") && e.metaKey) {
-        btnExtract.click();
-      }
-    });
-
-    async function extractFromFiles(files) {
-      extractedResults = [];
-      btnDownload.disabled = true;
-      setStatus("processing", "Extracting text...");
-
-      for (const file of files) {
-        const text = await file.text();
-        const extracted = extractTextFromHtml(text, {
-          headings: optHeadings.checked,
-          paragraphs: optParagraphs.checked,
-          images: optImages.checked,
-        });
-
-        extractedResults.push({
-          fileName: file.name,
-          text: extracted,
-          charCount: extracted.length,
-        });
+        htmlLog("Preserving tags: " + Array.from(preserveSet).map(t => "<" + t + ">").join(", "));
       }
 
-      renderResults();
+      let totalFiles = 0;
+      let totalLines = 0;
+      let totalImages = 0;
+      const mergedParts = []; // NEW: collect merged sections
 
-      if (extractedResults.length) {
-        const totalChars = extractedResults.reduce(
-          (sum, r) => sum + r.charCount,
-          0
-        );
-        const fileLabel =
-          extractedResults.length === 1 ? "file" : "files";
-        setStatus(
-          "idle",
-          `Extracted from ${extractedResults.length} ${fileLabel} — ${totalChars.toLocaleString()} characters total.`
-        );
-        btnDownload.disabled = false;
-      } else {
-        setStatus("error", "Nothing was extracted.");
-      }
-    }
+      try {
+        for (const file of selectedHtmlFiles) {
+          htmlLog(`\nProcessing file: ${file.name}`);
+          const text = await readFileAsText(file);
 
-    function extractTextFromHtml(htmlString, options) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlString, "text/html");
-      const lines = [];
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, "text/html");
 
-      function handleHeading(el, level) {
-        const text = el.textContent.replace(/\s+/g, " ").trim();
-        if (!text) return;
-        const hashes = "#".repeat(Math.min(level, 6));
-        lines.push("");
-        lines.push(`${hashes} ${text}`);
-      }
+          const selector = "h1,h2,h3,h4,h5,h6,p,footer,sup,small,b,i,u,img";
+          const elements = Array.from(doc.querySelectorAll(selector));
 
-      function handleParagraph(el) {
-        const text = el.textContent.replace(/\s+/g, " ").trim();
-        if (!text) return;
-        lines.push("");
-        lines.push(text);
-      }
+          let mainLines = [];
+          let imageFilenames = [];
 
-      function handleListItem(el) {
-        const text = el.textContent.replace(/\s+/g, " ").trim();
-        if (!text) return;
-        lines.push(`- ${text}`);
-      }
+          elements.forEach(el => {
+            const tag = el.tagName.toLowerCase();
 
-      function handleImage(el) {
-        if (!options.images) return;
-        const alt = (el.getAttribute("alt") || "").trim();
-        const src = (el.getAttribute("src") || "").trim();
-        let marker = "[IMAGE";
-        if (alt) marker += ` alt="${alt}"`;
-        if (src) marker += ` src="${src}"`;
-        marker += "]";
-        lines.push(marker);
-      }
+            // Images → [filename]
+            if (tag === "img") {
+              const src = el.getAttribute("src");
+              if (src) {
+                const parts = src.split(/[\\/]/);
+                const filename = parts[parts.length - 1];
+                imageFilenames.push(filename);
+                mainLines.push(`[${filename}]`);
+              }
+              return;
+            }
 
-      function walk(node) {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const tag = node.tagName.toLowerCase();
+            // Headers h1–h6
+            if (["h1","h2","h3","h4","h5","h6"].includes(tag)) {
+              const innerHtml = el.innerHTML;
+              if (!innerHtml || !innerHtml.trim()) return;
 
-          if (tag === "img") {
-            handleImage(node);
-            return;
+              const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
+              if (!cleanedInner.trim()) return;
+
+              let line;
+              if (preserveSet.has(tag)) {
+                line = `<${tag}>${cleanedInner}</${tag}>`;
+              } else {
+                line = cleanedInner; // downgrade to text
+              }
+
+              // NEW: also recognise explicit [image-xxx.jpg/png] marker lines
+              const markerMatch = line.trim().match(/^\[(image-[^\]]+\.(?:jpe?g|png))\]$/i);
+              if (markerMatch) {
+                imageFilenames.push(markerMatch[1]); // e.g. "image-foo.jpg"
+              }
+
+              line = normalizeHtmlTextLine(line);
+              if (line) mainLines.push(line);
+              return;
+            }
+
+            // Other tags (p, footer, sup, small, b, i, u, etc.)
+            const innerHtml = el.innerHTML;
+            if (!innerHtml || !innerHtml.trim()) return;
+
+            const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
+            if (!cleanedInner.trim()) return;
+
+            let line;
+            if (preserveSet.has(tag)) {
+              line = `<${tag}>${cleanedInner}</${tag}>`;
+            } else {
+              line = cleanedInner;
+            }
+
+            // NEW: also recognise explicit [image-xxx.jpg/png] marker lines
+            const markerMatch = line.trim().match(/^\[(image-[^\]]+\.(?:jpe?g|png))\]$/i);
+            if (markerMatch) {
+              imageFilenames.push(markerMatch[1]);
+            }
+
+            line = normalizeHtmlTextLine(line);
+            if (line) mainLines.push(line);
+          });
+
+          const mainText = mainLines.join("\n");
+          const imagesText = imageFilenames.join("\n");
+
+          totalFiles += 1;
+          totalLines += mainLines.length;
+          totalImages += imageFilenames.length;
+
+          // NEW: add to merged text parts in processing order
+          const headerLine = `===== ${file.name} =====`;
+          mergedParts.push(headerLine);
+          if (mainText.trim()) {
+            mergedParts.push(mainText.trim());
           }
 
-          if (options.headings && /^h[1-6]$/.test(tag)) {
-            const level = Number(tag[1]) || 1;
-            handleHeading(node, level);
-            return; // avoid duplicating inner text
+          const baseName = file.name.replace(/\.[^.]+$/, "");
+          const mainBlob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
+          const imgBlob  = new Blob([imagesText], { type: "text/plain;charset=utf-8" });
+
+          const mainOutName = `${baseName}.txt`;
+          const imgOutName  = `${baseName}_image_files.txt`;
+          generatedOutputs.push({ name: mainOutName, blob: mainBlob });
+          if (imageFilenames.length > 0) {
+            generatedOutputs.push({ name: imgOutName, blob: imgBlob });
           }
 
-          if (options.paragraphs && tag === "p") {
-            handleParagraph(node);
-            return; // avoid duplicating inner text
-          }
+          const mainUrl = URL.createObjectURL(mainBlob);
+          const imgUrl  = URL.createObjectURL(imgBlob);
 
-          if (tag === "li") {
-            handleListItem(node);
-            return; // avoid duplicating inner text
-          }
+          const mainRow = document.createElement("div");
+          mainRow.className = "file-item";
+          const mainLeft = document.createElement("div");
+          mainLeft.textContent = mainOutName;
+          const mainRight = document.createElement("div");
+          const mainA = document.createElement("a");
+          mainA.href = mainUrl;
+          mainA.download = mainOutName;
+          mainA.className = "download-link";
+          mainA.textContent = "Download extracted text";
+          mainRight.appendChild(mainA);
+          mainRow.appendChild(mainLeft);
+          mainRow.appendChild(mainRight);
 
-          // generic element: descend into children
-          for (const child of node.childNodes) {
-            walk(child);
-          }
-        } else if (node.nodeType === Node.TEXT_NODE) {
-          const text = node.nodeValue.replace(/\s+/g, " ").trim();
-          if (text) {
-            lines.push(text);
-          }
+          htmlDownloadsEl.appendChild(mainRow);
+
+          const imgRow = document.createElement("div");
+          imgRow.className = "file-item";
+          const imgLeft = document.createElement("div");
+          imgLeft.textContent = imgOutName;
+          const imgRight = document.createElement("div");
+          const imgA = document.createElement("a");
+          imgA.href = imgUrl;
+          imgA.download = imgOutName;
+          imgA.className = "download-link";
+          imgA.textContent = "Download image filename list";
+          imgRight.appendChild(imgA);
+          imgRow.appendChild(imgLeft);
+          imgRow.appendChild(imgRight);
+
+          htmlDownloadsEl.appendChild(imgRow);
+
+          htmlLog(
+            `Finished "${file.name}" – ` +
+            `${mainLines.length} content line(s), ${imageFilenames.length} image filename(s).`
+          );
+        }
+
+        // NEW: final merged text content
+        mergedTextContent = mergedParts.join("\n\n").trim();
+        if (mergedTextContent) {
+          mergedTextContent += "\n";
+          htmlLog("\nMerged text built for all files.");
+        }
+
+        htmlSummaryEl.textContent =
+          `Processed ${totalFiles} file(s). ` +
+          `Total ${totalLines} content line(s) and ${totalImages} image filename(s).`;
+
+        htmlLog("\nAll HTML/XHTML files processed.");
+
+        if (generatedOutputs.length > 0) {
+          htmlZipBtn.disabled = true;  // will re-enable below
+          htmlZipBtn.disabled = false;
+        }
+      } catch (err) {
+        htmlLog("Error processing HTML: " + (err.message || err));
+        alert("Error: " + (err.message || err));
+      } finally {
+        clearHtmlBtn.disabled = false;
+        processHtmlBtn.disabled = false;
+        if (generatedOutputs.length > 0) {
+          htmlZipBtn.disabled = false;
         }
       }
-
-      walk(doc.body || doc.documentElement);
-
-      // Clean up multiple blank lines
-      return lines
-        .join("\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-    }
-
-    // --- Results rendering ---
-
-    function renderResults() {
-      resultsEl.innerHTML = "";
-
-      if (!extractedResults.length) {
-        const empty = document.createElement("div");
-        empty.className = "result-empty";
-        empty.innerHTML =
-          'No output yet. Drop HTML files and click <strong>Extract text</strong> to see the cleaned content here.';
-        resultsEl.appendChild(empty);
-        return;
-      }
-
-      extractedResults.forEach((res, idx) => {
-        const wrapper = document.createElement("article");
-        wrapper.className = "result-item";
-
-        const header = document.createElement("div");
-        header.className = "result-header";
-
-        const fileInfo = document.createElement("div");
-        const nameSpan = document.createElement("div");
-        nameSpan.className = "result-file";
-        nameSpan.textContent = res.fileName;
-
-        const meta = document.createElement("div");
-        meta.className = "result-meta";
-
-        const indexPill = document.createElement("span");
-        indexPill.className = "pill small";
-        indexPill.textContent = `File ${idx + 1}`;
-
-        const charPill = document.createElement("span");
-        charPill.className = "pill small";
-        charPill.textContent = `${res.charCount.toLocaleString()} chars`;
-
-        meta.appendChild(indexPill);
-        meta.appendChild(charPill);
-
-        fileInfo.appendChild(nameSpan);
-        fileInfo.appendChild(meta);
-
-        const singleDownloadBtn = document.createElement("button");
-        singleDownloadBtn.className = "secondary";
-        singleDownloadBtn.type = "button";
-        singleDownloadBtn.textContent = "Download .txt";
-        singleDownloadBtn.addEventListener("click", () => {
-          downloadTextFile(res.text, toTxtName(res.fileName));
-        });
-
-        header.appendChild(fileInfo);
-        header.appendChild(singleDownloadBtn);
-
-        const body = document.createElement("div");
-        body.className = "result-body";
-
-        const textPre = document.createElement("pre");
-        textPre.className = "result-text";
-        textPre.textContent = res.text || "(empty)";
-
-        body.appendChild(textPre);
-
-        wrapper.appendChild(header);
-        wrapper.appendChild(body);
-
-        resultsEl.appendChild(wrapper);
-      });
-    }
-
-    function toTxtName(fileName) {
-      return fileName.replace(/\.[^.]+$/, "") + ".txt";
-    }
-
-    // --- Download logic (per-file ZIP or merged TXT) ---
-
-    btnDownload.addEventListener("click", () => {
-      if (!extractedResults.length) return;
-
-      if (optMerge.checked) {
-        // MERGED SINGLE FILE MODE
-        const mergedName =
-          (mergeFilenameInput.value || "").trim() || "merged_text.txt";
-        const mergedText = buildMergedText(extractedResults);
-        downloadTextFile(mergedText, mergedName);
-      } else {
-        // ORIGINAL BEHAVIOR: PER-FILE EXPORT VIA ZIP-LIKE DOWNLOAD
-        // For simplicity and zero dependencies, we'll trigger multiple .txt downloads.
-        // If you previously used JSZip, you can swap this block back
-        // to your ZIP implementation and just keep the merge branch above.
-        extractedResults.forEach((res) => {
-          downloadTextFile(res.text, toTxtName(res.fileName));
-        });
-      }
     });
 
-    function buildMergedText(results) {
-      // You can tweak this format if you want fewer markers.
-      const parts = [];
-      results.forEach((res, idx) => {
-        const headerLine = `===== File ${idx + 1}: ${res.fileName} =====`;
-        parts.push(headerLine);
-        if (res.text.trim()) {
-          parts.push("");
-          parts.push(res.text.trim());
+    htmlZipBtn.addEventListener("click", async () => {
+      if (generatedOutputs.length === 0) return;
+
+      htmlZipBtn.disabled = true;
+      const originalLabel = htmlZipBtn.textContent;
+      htmlZipBtn.textContent = "Preparing ZIP...";
+
+      try {
+        const zip = new JSZip();
+
+        if (mergeOutputToggle.checked && mergedTextContent) {
+          // MERGED MODE: one combined text file + all image list files
+          const mergedName =
+            (mergeOutputNameInput.value || "").trim() || "merged_text.txt";
+
+          // main merged text file
+          zip.file(mergedName, mergedTextContent);
+
+          // keep per-file image filename lists, if any
+          generatedOutputs
+            .filter(out => out.name.endsWith("_image_files.txt"))
+            .forEach(out => {
+              zip.file(out.name, out.blob);
+            });
+
+          htmlLog(`ZIP will contain merged text file "${mergedName}" plus image filename lists.`);
+        } else {
+          // ORIGINAL MODE: all generated outputs with their individual filenames
+          generatedOutputs.forEach(out => {
+            zip.file(out.name, out.blob);
+          });
+          htmlLog("ZIP will contain all per-file outputs with original filenames.");
         }
-        parts.push(""); // spacer
-      });
-      return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
-    }
 
-    function downloadTextFile(text, filename) {
-      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
 
-    // --- Merge UI toggle ---
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "html_extracted_outputs.zip";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
 
-    optMerge.addEventListener("change", () => {
-      if (optMerge.checked) {
-        mergeNameRow.classList.remove("hidden");
-      } else {
-        mergeNameRow.classList.add("hidden");
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } catch (err) {
+        htmlLog("Error creating ZIP: " + (err.message || err));
+        alert("Error creating ZIP: " + (err.message || err));
+      } finally {
+        htmlZipBtn.textContent = originalLabel;
+        htmlZipBtn.disabled = false;
       }
     });
-
-    // initialise hidden state
-    mergeNameRow.classList.add("hidden");
   </script>
 </body>
 </html>
