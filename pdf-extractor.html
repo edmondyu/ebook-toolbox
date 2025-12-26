@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Extract Text from PDF – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #f5f5f5;
+      color: #111827;
+    }
+    h1 { margin-top: 0; margin-bottom: 0.25rem; }
+    .subtitle { margin-top: 0; margin-bottom: 1.5rem; color: #6b7280; font-size: 0.95rem; }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+    }
+    button.primary { background: #2563eb; color: #fff; }
+    button.secondary { background: #e5e7eb; color: #111827; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    input[type="file"] { margin: 0.75rem 0; }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 0.5rem;
+    }
+    .hint { font-size: 0.85rem; color: #6b7280; }
+    .summary { font-size: 0.9rem; margin-top: 0.5rem; color: #374151; }
+    .log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 1rem;
+      border-radius: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+    a.back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: #2563eb;
+    }
+    .preview {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      padding: 1rem;
+      border-radius: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+    }
+  </style>
+
+  <!-- PDF.js (text-based PDFs; no OCR) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.js"></script>
+</head>
+<body>
+  <a class="back" href="index.html">← Back to Toolbox</a>
+  <h1>Extract Text from PDF</h1>
+  <p class="subtitle">
+    Extract text from a text-based PDF file (no OCR). Output is a plain text file. Traditional and Simplified Chinese are both supported as-is.
+  </p>
+
+  <div class="card">
+    <h2>1. Select PDF</h2>
+    <input id="pdf-file-input" type="file" accept="application/pdf,.pdf" />
+    <div class="hint">
+      Tip: If the PDF is scanned images, this tool will not read text (no OCR).
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Extract & Download</h2>
+    <div class="controls-row">
+      <button id="extract-btn" class="primary" disabled>Extract Text</button>
+      <button id="download-btn" class="secondary" disabled>Download .txt</button>
+      <button id="clear-btn" class="secondary">Clear</button>
+    </div>
+    <p class="summary" id="summary"></p>
+    <h3 style="margin:0.75rem 0 0.5rem;">Preview</h3>
+    <div class="preview" id="preview">(no output yet)</div>
+  </div>
+
+  <div class="card">
+    <h2>Logs</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const pdfFileInput = document.getElementById("pdf-file-input");
+    const extractBtn = document.getElementById("extract-btn");
+    const downloadBtn = document.getElementById("download-btn");
+    const clearBtn = document.getElementById("clear-btn");
+    const logEl = document.getElementById("log");
+    const previewEl = document.getElementById("preview");
+    const summaryEl = document.getElementById("summary");
+
+    let selectedFile = null;
+    let outputText = "";
+    let outputBlob = null;
+
+    function log(msg) {
+      logEl.textContent += msg + "\n";
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function resetOutputs() {
+      outputText = "";
+      outputBlob = null;
+      previewEl.textContent = "(no output yet)";
+      summaryEl.textContent = "";
+      downloadBtn.disabled = true;
+    }
+
+    pdfFileInput.addEventListener("change", () => {
+      resetOutputs();
+      logEl.textContent = "";
+      selectedFile = (pdfFileInput.files && pdfFileInput.files[0]) ? pdfFileInput.files[0] : null;
+
+      if (!selectedFile) {
+        extractBtn.disabled = true;
+        log("No PDF selected.");
+        return;
+      }
+
+      extractBtn.disabled = false;
+      log("Selected: " + selectedFile.name + " (" + Math.round(selectedFile.size/1024) + " KB)");
+    });
+
+    clearBtn.addEventListener("click", () => {
+      selectedFile = null;
+      pdfFileInput.value = "";
+      extractBtn.disabled = true;
+      logEl.textContent = "";
+      resetOutputs();
+    });
+
+    function downloadTextFile(filename, text) {
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      return blob;
+    }
+
+    // Group PDF text items into lines by Y coordinate (simple heuristic).
+    function itemsToLines(items) {
+      // Each item has: str, transform (matrix), width, height, ...
+      // Y coordinate is transform[5]; X is transform[4]
+      const rows = [];
+
+      for (const it of items) {
+        const s = (it.str || "").replace(/\s+/g, " ").trim();
+        if (!s) continue;
+
+        const x = it.transform ? it.transform[4] : 0;
+        const y = it.transform ? it.transform[5] : 0;
+
+        // Find an existing row close enough in Y
+        const tolerance = 2.0;
+        let row = rows.find(r => Math.abs(r.y - y) <= tolerance);
+
+        if (!row) {
+          row = { y, items: [] };
+          rows.push(row);
+        }
+        row.items.push({ x, s });
+      }
+
+      // Sort rows top-to-bottom (PDF y is typically bottom-up; but we can sort descending y for reading order)
+      rows.sort((a, b) => b.y - a.y);
+
+      const lines = rows.map(r => {
+        r.items.sort((a, b) => a.x - b.x);
+        return r.items.map(o => o.s).join(" ").replace(/\s+/g, " ").trim();
+      }).filter(Boolean);
+
+      return lines;
+    }
+
+    extractBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      extractBtn.disabled = true;
+      downloadBtn.disabled = true;
+      resetOutputs();
+      logEl.textContent = "";
+
+      try {
+        // Configure worker
+        if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+          // Use matching version worker from CDN
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js";
+        }
+
+        log("Reading PDF into memory...");
+        const buf = await selectedFile.arrayBuffer();
+
+        log("Loading PDF...");
+        const loadingTask = window.pdfjsLib.getDocument({ data: buf });
+        const pdf = await loadingTask.promise;
+
+        log("Pages: " + pdf.numPages);
+        const allLines = [];
+        let totalItems = 0;
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          log("Extracting page " + pageNum + " / " + pdf.numPages + "...");
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+
+          totalItems += (textContent.items || []).length;
+          const lines = itemsToLines(textContent.items || []);
+
+          if (lines.length > 0) {
+            allLines.push("===== Page " + pageNum + " =====");
+            allLines.push(...lines);
+            allLines.push(""); // spacer
+          } else {
+            allLines.push("===== Page " + pageNum + " =====");
+            allLines.push("(no text found on this page)");
+            allLines.push("");
+          }
+        }
+
+        outputText = allLines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+        outputBlob = new Blob([outputText], { type: "text/plain;charset=utf-8" });
+
+        // Preview first ~6000 chars
+        const previewMax = 6000;
+        previewEl.textContent = outputText.length > previewMax
+          ? (outputText.slice(0, previewMax) + "\n... [truncated preview] ...\n")
+          : outputText;
+
+        const baseName = selectedFile.name.replace(/\.[^.]+$/, "");
+        const outName = baseName + ".txt";
+
+        summaryEl.textContent =
+          "Extracted " + pdf.numPages + " page(s). " +
+          "Total text items: " + totalItems.toLocaleString() + ". " +
+          "Output size: " + Math.round(outputBlob.size/1024).toLocaleString() + " KB.";
+
+        downloadBtn.disabled = false;
+
+        // Wire download button
+        downloadBtn.onclick = () => {
+          downloadTextFile(outName, outputText);
+        };
+
+        log("Done.");
+      } catch (e) {
+        log("Error: " + (e && e.message ? e.message : String(e)));
+        alert("Error extracting PDF: " + (e && e.message ? e.message : String(e)));
+      } finally {
+        extractBtn.disabled = !selectedFile;
+      }
+    });
+  </script>
+</body>
+</html>
