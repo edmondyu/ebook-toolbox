@@ -42,10 +42,11 @@
       margin-top: 0.5rem;
     }
     .option-label {
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
+      margin-right: 1rem;
     }
     .hint { font-size: 0.85rem; color: #6b7280; }
     .summary { font-size: 0.9rem; margin-top: 0.5rem; color: #374151; }
@@ -78,36 +79,57 @@
       text-decoration: none;
       color: #2563eb;
     }
+    code {
+      background: #f3f4f6;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+    }
   </style>
 
-  <!-- PDF.js (UMD build exposes global pdfjsLib) -->
+  <!-- PDF.js UMD build (global pdfjsLib) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.min.js"></script>
 </head>
 <body>
   <a class="back" href="index.html">← Back to Toolbox</a>
+
   <h1>Extract Text from PDF</h1>
   <p class="subtitle">
-    Extract text from a text-based PDF (no OCR). Optional Simplified → Traditional conversion uses your zhconvert proxy.
+    Extract text from a <strong>text-based</strong> PDF (no OCR). Includes options to fix PDF spacing/line breaks, and optional Simplified → Traditional conversion via your Netlify proxy.
   </p>
 
   <div class="card">
     <h2>1. Select PDF</h2>
     <input id="pdf-file-input" type="file" accept="application/pdf,.pdf" />
     <div class="hint">
-      Tip: If the PDF is scanned images, this tool will not read text (no OCR).
+      If your PDF is scanned images, this tool won’t read text (no OCR).
     </div>
   </div>
 
   <div class="card">
     <h2>2. Options</h2>
     <div class="controls-row">
-      <label class="option-label" title="Uses /.netlify/functions/zhconvert to avoid CORS">
-        <input type="checkbox" id="s2t-toggle" />
-        Convert Simplified → Traditional Chinese (via zhconvert proxy)
+      <label class="option-label" title="Uses x-gap heuristic when rebuilding lines (recommended).">
+        <input type="checkbox" id="opt-xgap" checked />
+        Use X-gap spacing (recommended)
+      </label>
+
+      <label class="option-label" title="Removes spaces between CJK characters and fixes punctuation spacing.">
+        <input type="checkbox" id="opt-cjk-clean" checked />
+        Clean extra spaces (CJK-aware)
+      </label>
+
+      <label class="option-label" title="Reflows PDF line breaks into more natural paragraphs.">
+        <input type="checkbox" id="opt-reflow" checked />
+        Reflow lines
       </label>
     </div>
-    <div class="hint" style="margin-top:0.5rem;">
-      When enabled, extracted text will be sent to your Netlify Function (server-side) for conversion.
+
+    <div class="controls-row" style="margin-top:0.75rem;">
+      <label class="option-label" title="Uses /.netlify/functions/zhconvert to avoid CORS.">
+        <input type="checkbox" id="opt-s2t" />
+        Convert Simplified → Traditional (via zhconvert proxy)
+      </label>
+      <span class="hint">Uses <code>/.netlify/functions/zhconvert</code>.</span>
     </div>
   </div>
 
@@ -131,19 +153,26 @@
   </div>
 
   <script>
+    // Worker config for pdf.js 2.6.347
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js";
+
     const pdfFileInput = document.getElementById("pdf-file-input");
     const extractBtn = document.getElementById("extract-btn");
     const downloadBtn = document.getElementById("download-btn");
     const clearBtn = document.getElementById("clear-btn");
-    const s2tToggle = document.getElementById("s2t-toggle");
-
     const logEl = document.getElementById("log");
     const previewEl = document.getElementById("preview");
     const summaryEl = document.getElementById("summary");
 
+    const optXGap = document.getElementById("opt-xgap");
+    const optCjkClean = document.getElementById("opt-cjk-clean");
+    const optReflow = document.getElementById("opt-reflow");
+    const optS2T = document.getElementById("opt-s2t");
+
     let selectedFile = null;
     let outputText = "";
-    let outputBlob = null;
+    let outputName = "";
 
     function log(msg) {
       logEl.textContent += msg + "\n";
@@ -152,10 +181,22 @@
 
     function resetOutputs() {
       outputText = "";
-      outputBlob = null;
+      outputName = "";
       previewEl.textContent = "(no output yet)";
       summaryEl.textContent = "";
       downloadBtn.disabled = true;
+    }
+
+    function downloadTextFile(filename, text) {
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     }
 
     pdfFileInput.addEventListener("change", () => {
@@ -170,7 +211,7 @@
       }
 
       extractBtn.disabled = false;
-      log("Selected: " + selectedFile.name + " (" + Math.round(selectedFile.size / 1024) + " KB)");
+      log("Selected: " + selectedFile.name + " (" + Math.round(selectedFile.size/1024) + " KB)");
     });
 
     clearBtn.addEventListener("click", () => {
@@ -181,23 +222,131 @@
       resetOutputs();
     });
 
-    function downloadTextFile(filename, text) {
-      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-      return blob;
+    // ---------- Text shaping helpers ----------
+
+    // CJK detection (covers common CJK blocks)
+    function isCjkChar(ch) {
+      if (!ch) return false;
+      const code = ch.codePointAt(0);
+      return (
+        (code >= 0x4E00 && code <= 0x9FFF) || // CJK Unified Ideographs
+        (code >= 0x3400 && code <= 0x4DBF) || // CJK Extension A
+        (code >= 0xF900 && code <= 0xFAFF) || // CJK Compatibility Ideographs
+        (code >= 0x3040 && code <= 0x30FF) || // Hiragana/Katakana
+        (code >= 0xAC00 && code <= 0xD7AF)    // Hangul
+      );
     }
 
-    // Simple line grouping by Y coordinate (kept as-is for now).
-    // We'll improve spacing/line breaks in later steps, per your plan.
-    function itemsToLines(items) {
-      const rows = [];
+    function cleanCjkSpacing(text) {
+      let s = text;
+
+      // Remove spaces between consecutive CJK characters
+      s = s.replace(/([\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF])\s+([\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF])/g, "$1$2");
+
+      // Remove spaces before common punctuation (CJK + Western)
+      s = s.replace(/\s+([，。、；：！？）】』」〉》\]\)\}\.,;:!?])/g, "$1");
+
+      // Remove spaces after opening brackets/quotes
+      s = s.replace(/([（【『「〈《\[\(\{])\s+/g, "$1");
+
+      // Collapse multiple spaces to one (for Latin text)
+      s = s.replace(/[ \t]{2,}/g, " ");
+
+      // Trim each line
+      s = s.split("\n").map(l => l.trim()).join("\n");
+
+      return s;
+    }
+
+    // Decide whether to join two lines when reflowing
+    function shouldJoinLines(prev, curr) {
+      if (!prev) return false;
+      if (!curr) return false;
+
+      // keep paragraph breaks
+      if (prev.trim() === "" || curr.trim() === "") return false;
+
+      const p = prev.trim();
+      const c = curr.trim();
+
+      // If prev ends with strong sentence punctuation, keep a line break
+      if (/[。！？!?]\s*$/.test(p)) return false;
+
+      // If current looks like a list item, keep break
+      if (/^(\d+[\.\)]|\(?[a-zA-Z]\)|[-•●▪])\s+/.test(c)) return false;
+
+      // If prev ends with colon-ish, likely keep break
+      if (/[:：]\s*$/.test(p)) return false;
+
+      // Otherwise, join
+      return true;
+    }
+
+    function joinWithSmartSeparator(prev, curr) {
+      const p = prev.trimEnd();
+      const c = curr.trimStart();
+      const last = p.slice(-1);
+      const first = c.slice(0, 1);
+
+      // If both sides are CJK, no space
+      if (isCjkChar(last) && isCjkChar(first)) return p + c;
+
+      // If boundary is CJK + punctuation, no space
+      if (isCjkChar(last) && /[，。、；：！？\)\]】』」〉》]/.test(first)) return p + c;
+      if (/[（【『「〈《\[\(]/.test(last) && isCjkChar(first)) return p + c;
+
+      // Default: use a single space
+      return p + " " + c;
+    }
+
+    function reflowLines(lines) {
+      const out = [];
+      for (const raw of lines) {
+        const line = (raw || "").trim();
+        if (!line) {
+          // preserve paragraph breaks
+          if (out.length && out[out.length - 1] !== "") out.push("");
+          continue;
+        }
+
+        if (out.length === 0) {
+          out.push(line);
+          continue;
+        }
+
+        const prev = out[out.length - 1];
+        if (prev === "") {
+          out.push(line);
+          continue;
+        }
+
+        if (shouldJoinLines(prev, line)) {
+          out[out.length - 1] = joinWithSmartSeparator(prev, line);
+        } else {
+          out.push(line);
+        }
+      }
+
+      // Trim leading/trailing blank lines
+      while (out.length && out[0] === "") out.shift();
+      while (out.length && out[out.length - 1] === "") out.pop();
+
+      // Reduce multiple blank lines to single blank line
+      const compact = [];
+      for (const l of out) {
+        if (l === "" && compact.length && compact[compact.length - 1] === "") continue;
+        compact.push(l);
+      }
+      return compact;
+    }
+
+    // ---------- PDF extraction (Approach 2: X-gap spacing) ----------
+
+    // Group items into rows by Y coordinate, then build each row line by X.
+    function extractLinesFromItems(items, useXGap) {
+      const rows = []; // { y, items: [{x, endX, s}] }
+
+      // 1) group into rows
       for (const it of items) {
         const s = (it.str || "").replace(/\s+/g, " ").trim();
         if (!s) continue;
@@ -205,23 +354,66 @@
         const x = it.transform ? it.transform[4] : 0;
         const y = it.transform ? it.transform[5] : 0;
 
+        // width in text space; can be 0 for some items; guard it
+        const w = (typeof it.width === "number" && isFinite(it.width)) ? it.width : 0;
+        const endX = x + w;
+
         const tolerance = 2.0;
         let row = rows.find(r => Math.abs(r.y - y) <= tolerance);
         if (!row) {
           row = { y, items: [] };
           rows.push(row);
         }
-        row.items.push({ x, s });
+        row.items.push({ x, endX, s });
       }
 
+      // Sort rows top-to-bottom
       rows.sort((a, b) => b.y - a.y);
-      return rows.map(r => {
-        r.items.sort((a, b) => a.x - b.x);
-        return r.items.map(o => o.s).join(" ").replace(/\s+/g, " ").trim();
-      }).filter(Boolean);
+
+      // 2) build each row line
+      const lines = [];
+      for (const row of rows) {
+        row.items.sort((a, b) => a.x - b.x);
+
+        if (!useXGap) {
+          // simple join with a single space (still better than raw)
+          const line = row.items.map(o => o.s).join(" ").replace(/\s+/g, " ").trim();
+          if (line) lines.push(line);
+          continue;
+        }
+
+        // X-gap heuristic join:
+        // Insert a space only when the gap is large enough to represent a word boundary.
+        let lineParts = [];
+        for (let i = 0; i < row.items.length; i++) {
+          const cur = row.items[i];
+          lineParts.push(cur.s);
+
+          const next = row.items[i + 1];
+          if (!next) break;
+
+          const curEnd = (cur.endX && cur.endX > 0) ? cur.endX : cur.x;
+          const gap = next.x - curEnd;
+
+          // Threshold: gap > 2.5 in PDF text space is usually a "space"
+          // Keep it simple but effective.
+          if (gap > 2.5) {
+            lineParts.push(" ");
+          }
+        }
+
+        const line = lineParts.join("")
+          .replace(/[ \t]{2,}/g, " ")
+          .trim();
+
+        if (line) lines.push(line);
+      }
+
+      return lines;
     }
 
-    // Call your Netlify Function proxy (same approach as html-extractor)
+    // ---------- zhconvert proxy (optional) ----------
+
     async function convertToTraditionalChinese(text) {
       const resp = await fetch("/.netlify/functions/zhconvert", {
         method: "POST",
@@ -235,63 +427,38 @@
       }
 
       const json = await resp.json();
-      if (!json || !json.data || typeof json.data.text !== "string") {
-        throw new Error("Unexpected conversion response");
-      }
+      if (!json?.data?.text) throw new Error("Unexpected conversion response");
       return json.data.text;
     }
 
-    // Split big text into chunks so we don't overload the proxy/API.
-    // Chunk on paragraph boundaries if possible.
-    function chunkText(text, maxChars) {
+    // Chunk conversion to avoid huge single payloads.
+    // Splits on newline boundaries where possible.
+    async function convertLargeTextToTraditional(text, chunkSize = 8000) {
+      const lines = text.split("\n");
       const chunks = [];
-      const parts = text.split(/\n{2,}/); // paragraph-ish blocks
       let buf = "";
 
-      for (const p of parts) {
-        const block = (p || "").trim();
-        if (!block) continue;
-
-        const candidate = buf ? (buf + "\n\n" + block) : block;
-        if (candidate.length <= maxChars) {
-          buf = candidate;
-          continue;
-        }
-
-        if (buf) {
+      for (const line of lines) {
+        // +1 for newline
+        if ((buf.length + line.length + 1) > chunkSize && buf.length > 0) {
           chunks.push(buf);
           buf = "";
         }
-
-        // If a single block is huge, hard-split it.
-        if (block.length > maxChars) {
-          for (let i = 0; i < block.length; i += maxChars) {
-            chunks.push(block.slice(i, i + maxChars));
-          }
-        } else {
-          buf = block;
-        }
+        buf += line + "\n";
       }
-
-      if (buf) chunks.push(buf);
-      return chunks;
-    }
-
-    async function convertLargeTextToTraditional(text) {
-      // Keep below typical serverless/request limits
-      const MAX_CHARS = 12000;
-      const chunks = chunkText(text, MAX_CHARS);
-      log(`Converting text in ${chunks.length} chunk(s)...`);
+      if (buf.trim().length) chunks.push(buf);
 
       let out = "";
       for (let i = 0; i < chunks.length; i++) {
-        log(` • Converting chunk ${i + 1}/${chunks.length}...`);
+        log(`S2T converting chunk ${i + 1}/${chunks.length}...`);
+        // keep chunk boundaries stable
         const converted = await convertToTraditionalChinese(chunks[i]);
         out += converted;
-        if (i !== chunks.length - 1) out += "\n\n";
       }
       return out;
     }
+
+    // ---------- Main flow ----------
 
     extractBtn.addEventListener("click", async () => {
       if (!selectedFile) return;
@@ -302,10 +469,6 @@
       logEl.textContent = "";
 
       try {
-        // Worker config for PDF.js 2.6.347
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.6.347/pdf.worker.min.js";
-
         log("Reading PDF into memory...");
         const buf = await selectedFile.arrayBuffer();
 
@@ -318,54 +481,72 @@
         let totalItems = 0;
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-          log("Extracting page " + pageNum + " / " + pdf.numPages + "...");
+          log(`Extracting page ${pageNum}/${pdf.numPages}...`);
           const page = await pdf.getPage(pageNum);
-          const textContent = await page.getTextContent();
+          const textContent = await page.getTextContent({ normalizeWhitespace: false });
+
           const items = textContent.items || [];
           totalItems += items.length;
 
-          const lines = itemsToLines(items);
-          if (lines.length) {
-            allLines.push(...lines);
-            allLines.push(""); // spacer between pages
+          const pageLines = extractLinesFromItems(items, optXGap.checked);
+
+          // Keep a blank line between pages (no "===== Page =====" label)
+          if (pageLines.length) {
+            allLines.push(...pageLines);
+            allLines.push(""); // page break spacer
           }
         }
 
-        // Remove trailing blank lines, normalize multiple blank lines
-        outputText = allLines.join("\n")
+        let lines = allLines;
+
+        // Reflow (paragraph shaping)
+        if (optReflow.checked) {
+          lines = reflowLines(lines);
+        } else {
+          // still trim each line if not reflowing
+          lines = lines.map(l => (l || "").trim());
+        }
+
+        let text = lines.join("\n")
           .replace(/\n{3,}/g, "\n\n")
           .trim() + "\n";
 
-        // Optional conversion
-        if (s2tToggle.checked && outputText.trim()) {
+        // CJK spacing cleanup
+        if (optCjkClean.checked) {
+          text = cleanCjkSpacing(text);
+          // Normalize blank lines again after cleaning
+          text = text.replace(/\n{3,}/g, "\n\n").trim() + "\n";
+        }
+
+        // Optional S2T conversion via proxy
+        if (optS2T.checked && text.trim()) {
+          log("Starting Simplified → Traditional conversion (via proxy)...");
           try {
-            log("Starting Simplified → Traditional conversion...");
-            outputText = await convertLargeTextToTraditional(outputText);
-            outputText = outputText.replace(/\n{3,}/g, "\n\n").trim() + "\n";
-            log("Conversion done.");
+            text = await convertLargeTextToTraditional(text, 8000);
+            log("S2T conversion done.");
           } catch (e) {
-            log("Conversion failed; keeping original text. " + (e.message || e));
+            log("S2T conversion failed; keeping original text. " + (e.message || e));
           }
         }
 
-        outputBlob = new Blob([outputText], { type: "text/plain;charset=utf-8" });
+        outputText = text;
 
-        // Preview first ~6000 chars
-        const previewMax = 6000;
+        const baseName = selectedFile.name.replace(/\.[^.]+$/, "");
+        outputName = baseName + ".txt";
+
+        // Preview
+        const previewMax = 7000;
         previewEl.textContent = outputText.length > previewMax
           ? (outputText.slice(0, previewMax) + "\n... [truncated preview] ...\n")
           : outputText;
 
-        const baseName = selectedFile.name.replace(/\.[^.]+$/, "");
-        const outName = baseName + ".txt";
-
         summaryEl.textContent =
-          "Extracted " + pdf.numPages + " page(s). " +
-          "Total text items: " + totalItems.toLocaleString() + ". " +
-          "Output size: " + Math.round(outputBlob.size/1024).toLocaleString() + " KB.";
+          `Extracted ${pdf.numPages} page(s). ` +
+          `Total text items: ${totalItems.toLocaleString()}. ` +
+          `Output length: ${outputText.length.toLocaleString()} chars.`;
 
         downloadBtn.disabled = false;
-        downloadBtn.onclick = () => downloadTextFile(outName, outputText);
+        downloadBtn.onclick = () => downloadTextFile(outputName, outputText);
 
         log("Done.");
       } catch (e) {
