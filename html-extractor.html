@@ -223,15 +223,23 @@ clearHtmlBtn.addEventListener("click", () => {
 });
 
 async function convertToTraditionalChinese(text) {
-  const resp = await fetch("https://api.zhconvert.org/convert", {
+  const resp = await fetch("/.netlify/functions/zhconvert", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, converter: "Traditional" })
+    body: JSON.stringify({ text })
   });
-  if (!resp.ok) throw new Error("zhconvert failed");
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Proxy conversion failed (${resp.status}): ${errText}`);
+  }
+
   const json = await resp.json();
+  // zhconvert response shape: { data: { text: "..." } }
+  if (!json?.data?.text) throw new Error("Unexpected conversion response");
   return json.data.text;
 }
+
 
 processHtmlBtn.addEventListener("click", async () => {
   generatedOutputs = [];
