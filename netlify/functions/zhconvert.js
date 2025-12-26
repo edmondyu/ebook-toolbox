@@ -141,6 +141,7 @@ const REPLACEMENTS = [
 
   ["占有", "佔有"],
   ["占了", "佔了"],
+  ["汙染", "污染"],
 
   // punctuation normalization (ASCII -> full-width)
   [",", "，"],
