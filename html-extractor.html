@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <title>Extract Text from HTML – Toolbox</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -14,8 +13,16 @@
       background: #f5f5f5;
       color: #111827;
     }
-    h1 { margin-top: 0; margin-bottom: 0.25rem; }
-    .subtitle { margin-top: 0; margin-bottom: 1.5rem; color: #6b7280; font-size: 0.95rem; }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
     .card {
       background: #fff;
       border-radius: 10px;
@@ -31,16 +38,20 @@
       font-size: 0.95rem;
       margin-right: 0.5rem;
     }
-    button.primary { background: #2563eb; color: #fff; }
-    button.secondary { background: #e5e7eb; color: #111827; }
-    button:disabled { opacity: 0.6; cursor: default; }
-    input[type="file"] { margin: 0.75rem 0; }
-    input[type="text"] {
-      font-size: 0.85rem;
-      padding: 0.35rem 0.6rem;
-      border-radius: 6px;
-      border: 1px solid #d1d5db;
-      min-width: 220px;
+    button.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    input[type="file"] {
+      margin: 0.75rem 0;
     }
     .controls-row {
       display: flex;
@@ -49,8 +60,7 @@
       align-items: center;
       margin-top: 0.5rem;
     }
-    .tag-checkboxes label,
-    .option-label {
+    .tag-checkboxes label {
       font-size: 0.85rem;
       display: inline-flex;
       align-items: center;
@@ -58,8 +68,14 @@
       margin-right: 0.75rem;
       margin-bottom: 0.25rem;
     }
-    .hint { font-size: 0.85rem; color: #6b7280; }
-    .file-list { margin-top: 0.5rem; font-size: 0.9rem; }
+    .hint {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+    .file-list {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
     .file-item {
       display: flex;
       justify-content: space-between;
@@ -67,14 +83,20 @@
       padding: 0.35rem 0;
       border-bottom: 1px solid #e5e7eb;
     }
-    .file-item:last-child { border-bottom: none; }
+    .file-item:last-child {
+      border-bottom: none;
+    }
     a.download-link {
       font-size: 0.85rem;
       text-decoration: none;
       color: #2563eb;
       margin-left: 0.7rem;
     }
-    .summary { font-size: 0.9rem; margin-top: 0.5rem; color: #374151; }
+    .summary {
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+      color: #374151;
+    }
     .log {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       white-space: pre-wrap;
@@ -93,28 +115,51 @@
       text-decoration: none;
       color: #2563eb;
     }
+
+    /* NEW: merge/s2t option labels + text input styling */
+    .option-label {
+      font-size: 0.85rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    input[type="text"] {
+      font-size: 0.85rem;
+      padding: 0.35rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      min-width: 220px;
+    }
   </style>
 
+  <!-- JSZip for ZIP creation -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
-
 <body>
   <a class="back" href="index.html">← Back to Toolbox</a>
   <h1>Extract Text from HTML</h1>
   <p class="subtitle">
-    Extract structured text from HTML/XHTML files. Processing is local except optional Chinese conversion.
+    Extract structured text from HTML/XHTML files. All processing is done locally except optional Chinese conversion via Netlify Function proxy.
   </p>
 
-  <!-- CARD 1 -->
   <div class="card">
     <h2>1. Select HTML/XHTML Files & Tags to Preserve</h2>
-    <input id="html-file-input" type="file" multiple
-      accept=".html,.htm,.xhtml,text/html,application/xhtml+xml" />
+    <p>You can select one or more files, and you can repeat the selection to add more.</p>
+    <input
+      id="html-file-input"
+      type="file"
+      multiple
+      accept=".html,.htm,.xhtml,text/html,application/xhtml+xml"
+    />
 
-    <div id="html-file-list" class="file-list">No files selected.</div>
+    <!-- show selected source files -->
+    <div id="html-file-list" class="file-list"></div>
 
-    <div class="controls-row"><strong>Preserve tags:</strong></div>
+    <div class="controls-row">
+      <span style="font-size:0.9rem;">Preserve tags:</span>
+    </div>
 
+    <!-- Header tags -->
     <div class="controls-row tag-checkboxes">
       <label><input type="checkbox" class="tag-preserve-checkbox" value="h1" checked> &lt;h1&gt;</label>
       <label><input type="checkbox" class="tag-preserve-checkbox" value="h2" checked> &lt;h2&gt;</label>
@@ -124,6 +169,7 @@
       <label><input type="checkbox" class="tag-preserve-checkbox" value="h6" checked> &lt;h6&gt;</label>
     </div>
 
+    <!-- Inline/formatting tags -->
     <div class="controls-row tag-checkboxes">
       <label><input type="checkbox" class="tag-preserve-checkbox" value="b" checked> &lt;b&gt;</label>
       <label><input type="checkbox" class="tag-preserve-checkbox" value="i" checked> &lt;i&gt;</label>
@@ -139,193 +185,484 @@
     </div>
 
     <p class="hint">
-      Checked tags remain as HTML. Others are stripped but their text is kept.
+      Only checked tags will be preserved as HTML in the output. All other tags are removed but their text is kept.
+      For headings, unchecking &lt;h1&gt;–&lt;h6&gt; will downgrade them to plain text.
     </p>
   </div>
 
-  <!-- CARD 2 -->
   <div class="card">
     <h2>2. Extract & Download</h2>
-
     <button id="process-html-btn" class="primary" disabled>Extract Text</button>
     <button id="html-zip-btn" class="secondary" disabled>Download all as ZIP</button>
     <button id="clear-html-btn" class="secondary">Clear</button>
 
+    <!-- NEW: Merge option -->
     <div class="controls-row" style="margin-top:0.75rem;">
-      <label class="option-label">
-        <input type="checkbox" id="merge-toggle" />
-        Merge extracted text into a single file
+      <label class="option-label" title="If enabled, the ZIP will include one merged text file (plus per-file image filename lists).">
+        <input type="checkbox" id="merge-output-toggle" />
+        Merge extracted text into a single file when downloading all
       </label>
-      <input type="text" id="merge-filename" value="merged_text.txt" />
+      <label class="option-label" title="Filename for the merged output inside the ZIP.">
+        Merged filename:
+        <input type="text" id="merge-output-name" value="merged_text.txt" />
+      </label>
     </div>
 
+    <!-- NEW: Simplified → Traditional conversion option -->
     <div class="controls-row">
-      <label class="option-label">
+      <label class="option-label" title="Uses a Netlify Function proxy to call zhconvert (so the browser avoids CORS).">
         <input type="checkbox" id="s2t-toggle" />
-        Convert Simplified → Traditional Chinese (zhconvert)
+        Convert Simplified Chinese → Traditional Chinese (via zhconvert proxy)
       </label>
+      <span class="hint">Note: conversion sends extracted text to a serverless function.</span>
     </div>
 
     <p class="summary" id="html-summary"></p>
     <div id="html-downloads"></div>
   </div>
 
-  <!-- CARD 3 -->
   <div class="card">
     <h2>Logs</h2>
     <div class="log" id="html-log"></div>
   </div>
 
-<script>
-const htmlFileInput = document.getElementById("html-file-input");
-const processHtmlBtn = document.getElementById("process-html-btn");
-const clearHtmlBtn = document.getElementById("clear-html-btn");
-const htmlZipBtn = document.getElementById("html-zip-btn");
-const htmlLogEl = document.getElementById("html-log");
-const htmlDownloadsEl = document.getElementById("html-downloads");
-const htmlSummaryEl = document.getElementById("html-summary");
-const htmlFileListEl = document.getElementById("html-file-list");
+  <script>
+    const htmlFileInput       = document.getElementById("html-file-input");
+    const processHtmlBtn      = document.getElementById("process-html-btn");
+    const clearHtmlBtn        = document.getElementById("clear-html-btn");
+    const htmlZipBtn          = document.getElementById("html-zip-btn");
+    const htmlLogEl           = document.getElementById("html-log");
+    const htmlDownloadsEl     = document.getElementById("html-downloads");
+    const htmlSummaryEl       = document.getElementById("html-summary");
+    const tagCheckboxes       = document.querySelectorAll(".tag-preserve-checkbox");
+    const htmlFileListEl      = document.getElementById("html-file-list");
 
-const tagCheckboxes = document.querySelectorAll(".tag-preserve-checkbox");
-const mergeToggle = document.getElementById("merge-toggle");
-const mergeFilenameInput = document.getElementById("merge-filename");
-const s2tToggle = document.getElementById("s2t-toggle");
+    // NEW options
+    const mergeOutputToggle    = document.getElementById("merge-output-toggle");
+    const mergeOutputNameInput = document.getElementById("merge-output-name");
+    const s2tToggle            = document.getElementById("s2t-toggle");
 
-let selectedHtmlFiles = [];
-let generatedOutputs = [];
-let mergedTextContent = "";
+    let selectedHtmlFiles = [];
+    let generatedOutputs = []; // {name, blob}
+    let mergedTextContent = ""; // combined extracted text (post-conversion)
 
-function log(msg) {
-  htmlLogEl.textContent += msg + "\n";
-  htmlLogEl.scrollTop = htmlLogEl.scrollHeight;
-}
+    function htmlLog(message) {
+      htmlLogEl.textContent += message + "\n";
+      htmlLogEl.scrollTop = htmlLogEl.scrollHeight;
+    }
 
-htmlFileInput.addEventListener("change", () => {
-  selectedHtmlFiles = Array.from(htmlFileInput.files || []);
-  htmlFileListEl.textContent =
-    selectedHtmlFiles.length === 0
-      ? "No files selected."
-      : selectedHtmlFiles.map(f => f.name).join(", ");
-  processHtmlBtn.disabled = selectedHtmlFiles.length === 0;
-});
+    function bytesToKB(bytes) {
+      return (bytes / 1024).toFixed(2) + " KB";
+    }
 
-clearHtmlBtn.addEventListener("click", () => {
-  selectedHtmlFiles = [];
-  generatedOutputs = [];
-  mergedTextContent = "";
-  htmlFileInput.value = "";
-  htmlFileListEl.textContent = "No files selected.";
-  htmlDownloadsEl.innerHTML = "";
-  htmlSummaryEl.textContent = "";
-  htmlLogEl.textContent = "";
-  processHtmlBtn.disabled = true;
-  htmlZipBtn.disabled = true;
-});
-
-async function convertToTraditionalChinese(text) {
-  const resp = await fetch("/.netlify/functions/zhconvert", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text })
-  });
-
-  if (!resp.ok) {
-    const errText = await resp.text();
-    throw new Error(`Proxy conversion failed (${resp.status}): ${errText}`);
-  }
-
-  const json = await resp.json();
-  // zhconvert response shape: { data: { text: "..." } }
-  if (!json?.data?.text) throw new Error("Unexpected conversion response");
-  return json.data.text;
-}
-
-
-processHtmlBtn.addEventListener("click", async () => {
-  generatedOutputs = [];
-  mergedTextContent = "";
-  htmlDownloadsEl.innerHTML = "";
-  htmlLogEl.textContent = "";
-  htmlZipBtn.disabled = true;
-
-  const preserveSet = new Set(
-    Array.from(tagCheckboxes).filter(cb => cb.checked).map(cb => cb.value)
-  );
-
-  const mergedParts = [];
-
-  for (const file of selectedHtmlFiles) {
-    log("Processing " + file.name);
-    const text = await file.text();
-    const doc = new DOMParser().parseFromString(text, "text/html");
-
-    const els = Array.from(doc.querySelectorAll("h1,h2,h3,h4,h5,h6,p,img"));
-    let lines = [];
-
-    els.forEach(el => {
-      if (el.tagName.toLowerCase() === "img") {
-        const src = el.getAttribute("src");
-        if (src) lines.push("[" + src.split("/").pop() + "]");
+    function updateFileListUI() {
+      htmlFileListEl.innerHTML = "";
+      if (selectedHtmlFiles.length === 0) {
+        htmlFileListEl.textContent = "No files selected.";
         return;
       }
-      const tag = el.tagName.toLowerCase();
-      let inner = el.textContent.trim();
-      if (!inner) return;
-      if (preserveSet.has(tag)) {
-        lines.push(`<${tag}>${inner}</${tag}>`);
+      const frag = document.createDocumentFragment();
+      selectedHtmlFiles.forEach(file => {
+        const row = document.createElement("div");
+        row.className = "file-item";
+        const left = document.createElement("span");
+        left.textContent = file.name;
+        const right = document.createElement("span");
+        right.textContent = bytesToKB(file.size);
+        row.appendChild(left);
+        row.appendChild(right);
+        frag.appendChild(row);
+      });
+      htmlFileListEl.appendChild(frag);
+    }
+
+    htmlFileInput.addEventListener("change", () => {
+      const files = Array.from(htmlFileInput.files || []);
+
+      if (files.length === 0) {
+        if (selectedHtmlFiles.length === 0) {
+          processHtmlBtn.disabled = true;
+          htmlZipBtn.disabled = true;
+          htmlLog("No HTML/XHTML files selected.");
+          updateFileListUI();
+        }
+        return;
+      }
+
+      // allow "add more" selections without duplicates
+      const existingKey = f => `${f.name}:${f.size}`;
+      const currentKeys = new Set(selectedHtmlFiles.map(existingKey));
+
+      let addedCount = 0;
+      for (const f of files) {
+        const key = existingKey(f);
+        if (!currentKeys.has(key)) {
+          selectedHtmlFiles.push(f);
+          currentKeys.add(key);
+          addedCount++;
+        }
+      }
+
+      htmlFileInput.value = "";
+
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+      generatedOutputs = [];
+      mergedTextContent = "";
+      htmlZipBtn.disabled = true;
+
+      if (selectedHtmlFiles.length === 0) {
+        processHtmlBtn.disabled = true;
+        htmlLog("No HTML/XHTML files selected.");
+        updateFileListUI();
+        return;
+      }
+
+      processHtmlBtn.disabled = false;
+      updateFileListUI();
+
+      htmlLog(`Total selected files: ${selectedHtmlFiles.length}`);
+      if (addedCount > 0) {
+        htmlLog(`Added ${addedCount} new file(s):`);
+        selectedHtmlFiles.slice(-addedCount).forEach(f => htmlLog(" • " + f.name));
       } else {
-        lines.push(inner);
+        htmlLog("No new files added (duplicates ignored).");
       }
     });
 
-    let mainText = lines.join("\n");
+    clearHtmlBtn.addEventListener("click", () => {
+      selectedHtmlFiles = [];
+      generatedOutputs = [];
+      mergedTextContent = "";
+      htmlFileInput.value = "";
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+      htmlFileListEl.textContent = "No files selected.";
+      processHtmlBtn.disabled = true;
+      htmlZipBtn.disabled = true;
+    });
 
-    if (s2tToggle.checked && mainText.trim()) {
-      log("Converting to Traditional Chinese...");
-      mainText = await convertToTraditionalChinese(mainText);
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = err => reject(err);
+        reader.readAsText(file, "utf-8");
+      });
     }
 
-    if (mergeToggle.checked) {
-      mergedParts.push("===== " + file.name + " =====");
-      mergedParts.push(mainText);
+    // Remove non-preserved tags but keep their text and preserved tags inside
+    function cleanPreservingSelected(html, preserveSet) {
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = html;
+
+      function unwrapOthers(node) {
+        const children = Array.from(node.childNodes);
+        for (const child of children) {
+          if (child.nodeType === Node.ELEMENT_NODE) {
+            const tag = child.tagName.toLowerCase();
+            if (!preserveSet.has(tag)) {
+              unwrapOthers(child);
+              while (child.firstChild) {
+                node.insertBefore(child.firstChild, child);
+              }
+              node.removeChild(child);
+            } else {
+              unwrapOthers(child);
+            }
+          }
+        }
+      }
+
+      unwrapOthers(wrapper);
+      return wrapper.innerHTML;
     }
 
-    const blob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
-    generatedOutputs.push({ name: file.name.replace(/\.[^.]+$/, "") + ".txt", blob });
+    // Normalize whitespace so pretty HTML formatting doesn't create unwanted line breaks
+    function normalizeHtmlTextLine(line) {
+      let s = line;
+      s = s.replace(/\s+/g, " ");
+      s = s.replace(/\s+([。，、！!？?\.,;:])/g, "$1");
+      s = s.trim();
+      return s;
+    }
 
-    const url = URL.createObjectURL(blob);
-    const row = document.createElement("div");
-    row.className = "file-item";
-    row.innerHTML = `<span>${file.name}</span>
-      <a class="download-link" href="${url}" download>Download</a>`;
-    htmlDownloadsEl.appendChild(row);
-  }
+    // NEW: CORS-safe conversion via Netlify Function proxy
+    async function convertToTraditionalChinese(text) {
+      const resp = await fetch("/.netlify/functions/zhconvert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
 
-  if (mergeToggle.checked) {
-    mergedTextContent = mergedParts.join("\n\n") + "\n";
-  }
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Proxy conversion failed (${resp.status}): ${errText}`);
+      }
 
-  htmlSummaryEl.textContent = `Processed ${selectedHtmlFiles.length} file(s).`;
-  htmlZipBtn.disabled = generatedOutputs.length === 0;
-});
+      const json = await resp.json();
+      if (!json?.data?.text) throw new Error("Unexpected conversion response");
+      return json.data.text;
+    }
 
-htmlZipBtn.addEventListener("click", async () => {
-  const zip = new JSZip();
+    processHtmlBtn.addEventListener("click", async () => {
+      if (selectedHtmlFiles.length === 0) return;
 
-  if (mergeToggle.checked && mergedTextContent) {
-    const name = mergeFilenameInput.value.trim() || "merged_text.txt";
-    zip.file(name, mergedTextContent);
-  } else {
-    generatedOutputs.forEach(o => zip.file(o.name, o.blob));
-  }
+      processHtmlBtn.disabled = true;
+      clearHtmlBtn.disabled = true;
+      htmlZipBtn.disabled = true;
+      htmlDownloadsEl.innerHTML = "";
+      htmlSummaryEl.textContent = "";
+      htmlLogEl.textContent = "";
+      generatedOutputs = [];
+      mergedTextContent = "";
 
-  const blob = await zip.generateAsync({ type: "blob" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "html_extracted_outputs.zip";
-  a.click();
-});
-</script>
+      const preserveSet = new Set(
+        Array.from(tagCheckboxes)
+          .filter(cb => cb.checked)
+          .map(cb => cb.value.toLowerCase())
+      );
+
+      if (preserveSet.size === 0) {
+        htmlLog("Warning: no tags selected to preserve – output will be plain text only.");
+      } else {
+        htmlLog("Preserving tags: " + Array.from(preserveSet).map(t => "<" + t + ">").join(", "));
+      }
+
+      let totalFiles = 0;
+      let totalLines = 0;
+      let totalImages = 0;
+
+      const mergedParts = []; // if merge enabled, we'll fill this
+
+      try {
+        for (const file of selectedHtmlFiles) {
+          htmlLog(`\nProcessing file: ${file.name}`);
+          const text = await readFileAsText(file);
+
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, "text/html");
+
+          const selector = "h1,h2,h3,h4,h5,h6,p,footer,sup,small,b,i,u,img";
+          const elements = Array.from(doc.querySelectorAll(selector));
+
+          let mainLines = [];
+          let imageFilenames = [];
+
+          elements.forEach(el => {
+            const tag = el.tagName.toLowerCase();
+
+            // Images → [filename]
+            if (tag === "img") {
+              const src = el.getAttribute("src");
+              if (src) {
+                const parts = src.split(/[\\/]/);
+                const filename = parts[parts.length - 1];
+                imageFilenames.push(filename);
+                mainLines.push(`[${filename}]`);
+              }
+              return;
+            }
+
+            // Headers h1–h6
+            if (["h1","h2","h3","h4","h5","h6"].includes(tag)) {
+              const innerHtml = el.innerHTML;
+              if (!innerHtml || !innerHtml.trim()) return;
+
+              const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
+              if (!cleanedInner.trim()) return;
+
+              let line;
+              if (preserveSet.has(tag)) {
+                line = `<${tag}>${cleanedInner}</${tag}>`;
+              } else {
+                line = cleanedInner; // downgrade to text
+              }
+
+              // recognise explicit [image-xxx.jpg/png] marker lines
+              const markerMatch = line.trim().match(/^\[(image-[^\]]+\.(?:jpe?g|png))\]$/i);
+              if (markerMatch) {
+                imageFilenames.push(markerMatch[1]);
+              }
+
+              line = normalizeHtmlTextLine(line);
+              if (line) mainLines.push(line);
+              return;
+            }
+
+            // Other tags (p, footer, sup, small, b, i, u, etc.)
+            const innerHtml = el.innerHTML;
+            if (!innerHtml || !innerHtml.trim()) return;
+
+            const cleanedInner = cleanPreservingSelected(innerHtml, preserveSet);
+            if (!cleanedInner.trim()) return;
+
+            let line;
+            if (preserveSet.has(tag)) {
+              line = `<${tag}>${cleanedInner}</${tag}>`;
+            } else {
+              line = cleanedInner;
+            }
+
+            const markerMatch = line.trim().match(/^\[(image-[^\]]+\.(?:jpe?g|png))\]$/i);
+            if (markerMatch) {
+              imageFilenames.push(markerMatch[1]);
+            }
+
+            line = normalizeHtmlTextLine(line);
+            if (line) mainLines.push(line);
+          });
+
+          let mainText = mainLines.join("\n");
+          const imagesText = imageFilenames.join("\n");
+
+          // Optional CN(Simplified) → Traditional conversion
+          if (s2tToggle.checked && mainText.trim()) {
+            try {
+              htmlLog("Converting to Traditional Chinese (via proxy)...");
+              mainText = await convertToTraditionalChinese(mainText);
+              htmlLog("Conversion done.");
+            } catch (e) {
+              htmlLog("Conversion failed; keeping original text. " + (e.message || e));
+            }
+          }
+
+          totalFiles += 1;
+          totalLines += mainLines.length;
+          totalImages += imageFilenames.length;
+
+          // If merge enabled: append converted text in order
+          if (mergeOutputToggle.checked) {
+            mergedParts.push(`===== ${file.name} =====`);
+            if (mainText.trim()) mergedParts.push(mainText.trim());
+          }
+
+          const baseName = file.name.replace(/\.[^.]+$/, "");
+          const mainBlob = new Blob([mainText], { type: "text/plain;charset=utf-8" });
+          const imgBlob  = new Blob([imagesText], { type: "text/plain;charset=utf-8" });
+
+          const mainOutName = `${baseName}.txt`;
+          const imgOutName  = `${baseName}_image_files.txt`;
+
+          generatedOutputs.push({ name: mainOutName, blob: mainBlob });
+          if (imageFilenames.length > 0) {
+            generatedOutputs.push({ name: imgOutName, blob: imgBlob });
+          }
+
+          const mainUrl = URL.createObjectURL(mainBlob);
+          const imgUrl  = URL.createObjectURL(imgBlob);
+
+          const mainRow = document.createElement("div");
+          mainRow.className = "file-item";
+          const mainLeft = document.createElement("div");
+          mainLeft.textContent = mainOutName;
+          const mainRight = document.createElement("div");
+          const mainA = document.createElement("a");
+          mainA.href = mainUrl;
+          mainA.download = mainOutName;
+          mainA.className = "download-link";
+          mainA.textContent = "Download extracted text";
+          mainRight.appendChild(mainA);
+          mainRow.appendChild(mainLeft);
+          mainRow.appendChild(mainRight);
+          htmlDownloadsEl.appendChild(mainRow);
+
+          const imgRow = document.createElement("div");
+          imgRow.className = "file-item";
+          const imgLeft = document.createElement("div");
+          imgLeft.textContent = imgOutName;
+          const imgRight = document.createElement("div");
+          const imgA = document.createElement("a");
+          imgA.href = imgUrl;
+          imgA.download = imgOutName;
+          imgA.className = "download-link";
+          imgA.textContent = "Download image filename list";
+          imgRight.appendChild(imgA);
+          imgRow.appendChild(imgLeft);
+          imgRow.appendChild(imgRight);
+          htmlDownloadsEl.appendChild(imgRow);
+
+          htmlLog(
+            `Finished "${file.name}" – ` +
+            `${mainLines.length} content line(s), ${imageFilenames.length} image filename(s).`
+          );
+        }
+
+        // Final merged output
+        if (mergeOutputToggle.checked) {
+          mergedTextContent = mergedParts.join("\n\n").trim();
+          if (mergedTextContent) mergedTextContent += "\n";
+          htmlLog("\nMerged text built for all files.");
+        } else {
+          mergedTextContent = "";
+        }
+
+        htmlSummaryEl.textContent =
+          `Processed ${totalFiles} file(s). ` +
+          `Total ${totalLines} content line(s) and ${totalImages} image filename(s).`;
+
+        htmlLog("\nAll HTML/XHTML files processed.");
+        if (generatedOutputs.length > 0) htmlZipBtn.disabled = false;
+
+      } catch (err) {
+        htmlLog("Error processing HTML: " + (err.message || err));
+        alert("Error: " + (err.message || err));
+      } finally {
+        clearHtmlBtn.disabled = false;
+        processHtmlBtn.disabled = false;
+      }
+    });
+
+    htmlZipBtn.addEventListener("click", async () => {
+      if (generatedOutputs.length === 0) return;
+
+      htmlZipBtn.disabled = true;
+      const originalLabel = htmlZipBtn.textContent;
+      htmlZipBtn.textContent = "Preparing ZIP...";
+
+      try {
+        const zip = new JSZip();
+
+        // Merge mode ZIP: merged text file + per-file image lists
+        if (mergeOutputToggle.checked && mergedTextContent) {
+          const mergedName =
+            (mergeOutputNameInput.value || "").trim() || "merged_text.txt";
+
+          zip.file(mergedName, mergedTextContent);
+
+          // Keep only image lists in merge mode (not the per-file main .txt)
+          generatedOutputs
+            .filter(out => out.name.endsWith("_image_files.txt"))
+            .forEach(out => zip.file(out.name, out.blob));
+
+          htmlLog(`ZIP created with merged file "${mergedName}" + image lists.`);
+        } else {
+          // Original mode: all generated outputs
+          generatedOutputs.forEach(out => zip.file(out.name, out.blob));
+          htmlLog("ZIP created with all per-file outputs.");
+        }
+
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "html_extracted_outputs.zip";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } catch (err) {
+        htmlLog("Error creating ZIP: " + (err.message || err));
+        alert("Error creating ZIP: " + (err.message || err));
+      } finally {
+        htmlZipBtn.textContent = originalLabel;
+        htmlZipBtn.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>
