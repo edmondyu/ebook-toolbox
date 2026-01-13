@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Toolbox – Split Double-Span PDF</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #f5f5f5;
+      color: #111827;
+    }
+    h1 { margin: 0 0 0.25rem 0; }
+    .subtitle {
+      margin: 0 0 1.25rem 0;
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.25rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 1rem;
+    }
+    label { font-weight: 600; display: block; margin-top: 0.75rem; }
+    input[type="file"] { margin-top: 0.35rem; }
+    input[type="range"] { width: 100%; }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      align-items: start;
+    }
+    @media (max-width: 720px) {
+      .row { grid-template-columns: 1fr; }
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.6rem 1.1rem;
+      border-radius: 999px;
+      border: none;
+      background: #2563eb;
+      color: #fff;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn.secondary {
+      background: #111827;
+    }
+    .muted { color: #6b7280; font-size: 0.9rem; }
+    .status {
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 10px;
+      background: #f3f4f6;
+      color: #111827;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      min-height: 2.2rem;
+    }
+    .previewWrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+    canvas {
+      width: 100%;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    }
+    .topActions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    a.link {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    code { background: #f3f4f6; padding: 0.1rem 0.3rem; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="topActions">
+    <a class="link" href="index.html">← Back to Toolbox</a>
+  </div>
+
+  <h1>Split Double-Span PDF</h1>
+  <p class="subtitle">
+    Splits each PDF page that contains a 2-page spread (left+right) into two single pages.
+    Processing is done locally in your browser (no upload).
+  </p>
+
+  <div class="card">
+    <label>1) Choose a PDF</label>
+    <input id="file" type="file" accept="application/pdf" />
+
+    <div class="row" style="margin-top: 0.75rem;">
+      <div>
+        <label>2) Split position: <span id="splitPctLabel">50%</span></label>
+        <input id="splitPct" type="range" min="30" max="70" value="50" />
+        <div class="muted">Tip: adjust if the gutter isn't exactly centered.</div>
+
+        <label>3) Page order</label>
+        <div style="margin-top:0.4rem;">
+          <label style="font-weight:400; display:flex; gap:0.5rem; align-items:center; margin:0.15rem 0;">
+            <input type="radio" name="order" value="LR" checked />
+            Left page then right page (L → R)
+          </label>
+          <label style="font-weight:400; display:flex; gap:0.5rem; align-items:center; margin:0.15rem 0;">
+            <input type="radio" name="order" value="RL" />
+            Right page then left page (R → L)
+          </label>
+        </div>
+
+        <label>4) Render quality</label>
+        <div style="display:flex; gap:0.75rem; align-items:center; margin-top:0.35rem;">
+          <select id="quality">
+            <option value="1.5">Standard</option>
+            <option value="2" selected>High</option>
+            <option value="3">Very high (slower)</option>
+          </select>
+          <div class="muted">Higher = sharper but bigger files.</div>
+        </div>
+
+        <div style="margin-top:1rem; display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <button id="previewBtn" class="btn secondary" disabled>Preview first page</button>
+          <button id="convertBtn" class="btn" disabled>Split & download</button>
+        </div>
+
+        <div id="status" class="status" aria-live="polite"></div>
+      </div>
+
+      <div>
+        <label>Preview (page 1)</label>
+        <div class="muted">Shows the two output pages based on your current split settings.</div>
+        <div class="previewWrap">
+          <canvas id="prevLeft"></canvas>
+          <canvas id="prevRight"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    // PDF.js worker setup (CDN)
+    const pdfjsLib = window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js';
+
+    const { PDFDocument } = window.PDFLib;
+
+    const $file = document.getElementById('file');
+    const $splitPct = document.getElementById('splitPct');
+    const $splitPctLabel = document.getElementById('splitPctLabel');
+    const $quality = document.getElementById('quality');
+    const $previewBtn = document.getElementById('previewBtn');
+    const $convertBtn = document.getElementById('convertBtn');
+    const $status = document.getElementById('status');
+
+    const $prevLeft = document.getElementById('prevLeft');
+    const $prevRight = document.getElementById('prevRight');
+
+    let pdfBytes = null;
+    let pdfDoc = null;
+
+    function setStatus(msg) {
+      $status.textContent = msg || '';
+    }
+
+    function getOrder() {
+      return document.querySelector('input[name="order"]:checked')?.value || 'LR';
+    }
+
+    function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+
+    function canvasFromCrop(srcCanvas, sx, sy, sw, sh) {
+      const out = document.createElement('canvas');
+      out.width = Math.max(1, Math.floor(sw));
+      out.height = Math.max(1, Math.floor(sh));
+      const ctx = out.getContext('2d', { alpha: false });
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(srcCanvas, sx, sy, sw, sh, 0, 0, out.width, out.height);
+      return out;
+    }
+
+    function canvasToPngBytes(canvas) {
+      const dataUrl = canvas.toDataURL('image/png');
+      const b64 = dataUrl.split(',')[1];
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+
+    async function renderPageToCanvas(pageIndex, scale) {
+      const page = await pdfDoc.getPage(pageIndex);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const ctx = canvas.getContext('2d', { alpha: false });
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      return { canvas, width: canvas.width, height: canvas.height };
+    }
+
+    async function previewFirstPage() {
+      if (!pdfDoc) return;
+
+      setStatus('Rendering preview…');
+      const scale = parseFloat($quality.value);
+
+      const { canvas, width, height } = await renderPageToCanvas(1, scale);
+      const splitPct = parseInt($splitPct.value, 10) / 100;
+      const splitX = Math.round(width * splitPct);
+
+      const left = canvasFromCrop(canvas, 0, 0, splitX, height);
+      const right = canvasFromCrop(canvas, splitX, 0, width - splitX, height);
+
+      function drawPreview(target, src) {
+        const tw = target.clientWidth || 400;
+        const aspect = src.height / src.width;
+        target.width = Math.max(1, Math.floor(tw));
+        target.height = Math.max(1, Math.floor(tw * aspect));
+        const tctx = target.getContext('2d', { alpha: false });
+        tctx.imageSmoothingEnabled = true;
+        tctx.drawImage(src, 0, 0, target.width, target.height);
+      }
+
+      drawPreview($prevLeft, left);
+      drawPreview($prevRight, right);
+
+      setStatus('Preview ready. If the gutter looks off-center, adjust the split slider.');
+    }
+
+    async function convert() {
+      if (!pdfDoc || !pdfBytes) return;
+
+      $convertBtn.disabled = true;
+      $previewBtn.disabled = true;
+
+      const total = pdfDoc.numPages;
+      const scale = parseFloat($quality.value);
+      const order = getOrder();
+      const splitPct = parseInt($splitPct.value, 10) / 100;
+
+      setStatus(`Splitting ${total} page(s)…
+This can take a while for large PDFs.`);
+
+      const outPdf = await PDFDocument.create();
+
+      for (let i = 1; i <= total; i++) {
+        setStatus(`Processing page ${i} / ${total}…`);
+        const { canvas, width, height } = await renderPageToCanvas(i, scale);
+
+        const splitX = clamp(Math.round(width * splitPct), 1, width - 1);
+
+        const leftCanvas = canvasFromCrop(canvas, 0, 0, splitX, height);
+        const rightCanvas = canvasFromCrop(canvas, splitX, 0, width - splitX, height);
+
+        const leftBytes = canvasToPngBytes(leftCanvas);
+        const rightBytes = canvasToPngBytes(rightCanvas);
+
+        const leftImg = await outPdf.embedPng(leftBytes);
+        const rightImg = await outPdf.embedPng(rightBytes);
+
+        const makePageWithImage = (img, w, h) => {
+          const page = outPdf.addPage([w, h]);
+          page.drawImage(img, { x: 0, y: 0, width: w, height: h });
+        };
+
+        if (order === 'LR') {
+          makePageWithImage(leftImg, leftCanvas.width, leftCanvas.height);
+          makePageWithImage(rightImg, rightCanvas.width, rightCanvas.height);
+        } else {
+          makePageWithImage(rightImg, rightCanvas.width, rightCanvas.height);
+          makePageWithImage(leftImg, leftCanvas.width, leftCanvas.height);
+        }
+
+        await new Promise(r => setTimeout(r, 0));
+      }
+
+      setStatus('Finalizing PDF…');
+      const outBytes = await outPdf.save();
+
+      const blob = new Blob([outBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+
+      const originalName = ($file.files?.[0]?.name || 'document.pdf').replace(/\.pdf$/i, '');
+      a.href = url;
+      a.download = `${originalName}__single-pages.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      setStatus('Done! Your split PDF has been downloaded.');
+      $convertBtn.disabled = false;
+      $previewBtn.disabled = false;
+    }
+
+    $splitPct.addEventListener('input', () => {
+      document.getElementById('splitPctLabel').textContent = `${$splitPct.value}%`;
+    });
+
+    $file.addEventListener('change', async () => {
+      const f = $file.files?.[0];
+      if (!f) return;
+
+      setStatus('Loading PDF…');
+      pdfBytes = await f.arrayBuffer();
+
+      const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+      pdfDoc = await loadingTask.promise;
+
+      setStatus(`Loaded: ${f.name}
+Pages: ${pdfDoc.numPages}`);
+      document.getElementById('previewBtn').disabled = false;
+      document.getElementById('convertBtn').disabled = false;
+
+      try { await previewFirstPage(); } catch (e) { setStatus(`Loaded, but preview failed: ${e}`); }
+    });
+
+    document.getElementById('previewBtn').addEventListener('click', () => previewFirstPage().catch(e => setStatus(String(e))));
+    document.getElementById('convertBtn').addEventListener('click', () => convert().catch(e => {
+      console.error(e);
+      setStatus('Error: ' + (e?.message || String(e)));
+      document.getElementById('convertBtn').disabled = false;
+      document.getElementById('previewBtn').disabled = false;
+    }));
+  </script>
+</body>
+</html>
