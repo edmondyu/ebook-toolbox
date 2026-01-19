@@ -84,6 +84,13 @@
       padding: 0.1rem 0.3rem;
       border-radius: 4px;
     }
+    select {
+      padding: 0.45rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      font-size: 0.9rem;
+      background: #fff;
+    }
   </style>
 
   <!-- PDF.js UMD build (global pdfjsLib) -->
@@ -107,7 +114,20 @@
 
   <div class="card">
     <h2>2. Options</h2>
+
     <div class="controls-row">
+      <label class="option-label" style="align-items:flex-start;">
+        <span style="min-width:140px; font-weight:600;">Extraction approach</span>
+        <select id="opt-approach">
+          <option value="xgap" selected>Approach A: PDF.js X-gap (current, layout-aware)</option>
+          <option value="native">Approach B: PDF.js Native order (simpler, sometimes best for CJK)</option>
+          <option value="glyph">Approach C: Glyph fallback (best-effort when Chinese is garbled)</option>
+        </select>
+      </label>
+      <span class="hint" id="approach-hint">Uses your current row/X-gap rebuild logic.</span>
+    </div>
+
+    <div class="controls-row" style="margin-top:0.75rem;">
       <label class="option-label" title="Uses x-gap heuristic when rebuilding lines (recommended).">
         <input type="checkbox" id="opt-xgap" checked />
         Use X-gap spacing (recommended)
@@ -130,6 +150,10 @@
         Convert Simplified → Traditional (via zhconvert proxy)
       </label>
       <span class="hint">Uses <code>/.netlify/functions/zhconvert</code>.</span>
+    </div>
+
+    <div class="hint" style="margin-top:0.75rem;">
+      Tip: If Chinese comes out blank/garbled, try <strong>Approach B</strong>, then <strong>Approach C</strong>.
     </div>
   </div>
 
@@ -170,6 +194,9 @@
     const optReflow = document.getElementById("opt-reflow");
     const optS2T = document.getElementById("opt-s2t");
 
+    const optApproach = document.getElementById("opt-approach");
+    const approachHintEl = document.getElementById("approach-hint");
+
     let selectedFile = null;
     let outputText = "";
     let outputName = "";
@@ -198,6 +225,24 @@
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     }
+
+    function updateApproachUI() {
+      const v = optApproach.value;
+
+      // X-gap checkbox is only meaningful for the X-gap approach
+      optXGap.disabled = (v !== "xgap");
+      if (v !== "xgap") optXGap.checked = false;
+
+      if (v === "xgap") {
+        approachHintEl.textContent = "Uses your current row/X-gap rebuild logic.";
+      } else if (v === "native") {
+        approachHintEl.textContent = "Assembles text in PDF.js native reading order (less layout logic).";
+      } else if (v === "glyph") {
+        approachHintEl.textContent = "Best-effort fallback if Unicode mapping is broken; filters private-use glyphs.";
+      }
+    }
+    optApproach.addEventListener("change", updateApproachUI);
+    updateApproachUI();
 
     pdfFileInput.addEventListener("change", () => {
       resetOutputs();
@@ -340,7 +385,7 @@
       return compact;
     }
 
-    // ---------- PDF extraction (Approach 2: X-gap spacing) ----------
+    // ---------- PDF extraction (Approach A: X-gap spacing) ----------
 
     // Group items into rows by Y coordinate, then build each row line by X.
     function extractLinesFromItems(items, useXGap) {
@@ -396,7 +441,6 @@
           const gap = next.x - curEnd;
 
           // Threshold: gap > 2.5 in PDF text space is usually a "space"
-          // Keep it simple but effective.
           if (gap > 2.5) {
             lineParts.push(" ");
           }
@@ -410,6 +454,62 @@
       }
 
       return lines;
+    }
+
+    // ---------- PDF extraction approaches (B/C) ----------
+
+    // Approach B: PDF.js "native order"
+    function extractTextNative(textContent) {
+      const items = textContent.items || [];
+      let out = "";
+
+      for (const it of items) {
+        const s = (it.str || "");
+        out += s;
+        if (it.hasEOL) out += "\n";
+      }
+
+      out = out.replace(/[ \t]{2,}/g, " ");
+      return out;
+    }
+
+    function hasPrivateUseChars(s) {
+      return /[\uE000-\uF8FF]/.test(s);
+    }
+
+    function stripPrivateUseChars(s) {
+      return s.replace(/[\uE000-\uF8FF]/g, "");
+    }
+
+    // Approach C: Glyph fallback
+    function extractTextGlyphFallback(textContent) {
+      const items = textContent.items || [];
+      let out = "";
+
+      for (const it of items) {
+        let s = (it.unicode && typeof it.unicode === "string") ? it.unicode : (it.str || "");
+
+        if (hasPrivateUseChars(s)) {
+          const stripped = stripPrivateUseChars(s);
+          if (stripped.trim().length >= Math.min(2, s.trim().length)) {
+            s = stripped;
+          }
+        }
+
+        out += s;
+        if (it.hasEOL) out += "\n";
+      }
+
+      out = out.replace(/[ \t]{2,}/g, " ");
+      return out;
+    }
+
+    function textToLines(text) {
+      return text
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .split("\n")
+        .map(l => (l || "").trimEnd());
     }
 
     // ---------- zhconvert proxy (optional) ----------
@@ -432,14 +532,12 @@
     }
 
     // Chunk conversion to avoid huge single payloads.
-    // Splits on newline boundaries where possible.
     async function convertLargeTextToTraditional(text, chunkSize = 8000) {
       const lines = text.split("\n");
       const chunks = [];
       let buf = "";
 
       for (const line of lines) {
-        // +1 for newline
         if ((buf.length + line.length + 1) > chunkSize && buf.length > 0) {
           chunks.push(buf);
           buf = "";
@@ -451,7 +549,6 @@
       let out = "";
       for (let i = 0; i < chunks.length; i++) {
         log(`S2T converting chunk ${i + 1}/${chunks.length}...`);
-        // keep chunk boundaries stable
         const converted = await convertToTraditionalChinese(chunks[i]);
         out += converted;
       }
@@ -476,6 +573,7 @@
         const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
 
         log("Pages: " + pdf.numPages);
+        log("Approach: " + optApproach.options[optApproach.selectedIndex].text);
 
         const allLines = [];
         let totalItems = 0;
@@ -488,12 +586,22 @@
           const items = textContent.items || [];
           totalItems += items.length;
 
-          const pageLines = extractLinesFromItems(items, optXGap.checked);
+          let pageLines = [];
 
-          // Keep a blank line between pages (no "===== Page =====" label)
+          if (optApproach.value === "xgap") {
+            pageLines = extractLinesFromItems(items, optXGap.checked);
+          } else if (optApproach.value === "native") {
+            const raw = extractTextNative(textContent);
+            pageLines = textToLines(raw);
+          } else if (optApproach.value === "glyph") {
+            const raw = extractTextGlyphFallback(textContent);
+            pageLines = textToLines(raw);
+          }
+
+          // Keep a blank line between pages (no label)
           if (pageLines.length) {
             allLines.push(...pageLines);
-            allLines.push(""); // page break spacer
+            allLines.push("");
           }
         }
 
@@ -503,7 +611,6 @@
         if (optReflow.checked) {
           lines = reflowLines(lines);
         } else {
-          // still trim each line if not reflowing
           lines = lines.map(l => (l || "").trim());
         }
 
@@ -514,7 +621,6 @@
         // CJK spacing cleanup
         if (optCjkClean.checked) {
           text = cleanCjkSpacing(text);
-          // Normalize blank lines again after cleaning
           text = text.replace(/\n{3,}/g, "\n\n").trim() + "\n";
         }
 
