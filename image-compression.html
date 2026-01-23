@@ -156,6 +156,20 @@
         Example: 50 → compressed file ≈ 50% of resized file size.
       </span>
     </div>
+    <div class="controls-row">
+      <label>
+        <input id="enable-resize-checkbox" type="checkbox" checked />
+        Enable resize (fit within max width/height)
+      </label>
+      <label>
+        <input id="convert-to-jpg-checkbox" type="checkbox" checked />
+        Convert output to JPG
+      </label>
+      <span class="hint">
+        If JPG conversion is off, PNG outputs won’t honor target size % (PNG quality is not adjustable).
+      </span>
+    </div>
+
 
     <div class="file-list" id="img-file-list"></div>
   </div>
@@ -178,7 +192,9 @@
     const imgFileInput      = document.getElementById("img-file-input");
     const maxWidthInput     = document.getElementById("max-width-input");
     const maxHeightInput    = document.getElementById("max-height-input");
-    const targetPercentInput= document.getElementById("target-percent-input");
+    const targetPercentInput= document\.getElementById\("target-percent-input"\);
+    const enableResizeCheckbox = document.getElementById("enable-resize-checkbox");
+    const convertToJpgCheckbox = document.getElementById("convert-to-jpg-checkbox");
     const processImagesBtn  = document.getElementById("process-images-btn");
     const clearImagesBtn    = document.getElementById("clear-images-btn");
     const zipImagesBtn      = document.getElementById("zip-images-btn");
@@ -258,6 +274,13 @@
       imgLogEl.textContent = "";
     }
 
+    function syncResizeControls() {
+      const enabled = enableResizeCheckbox.checked;
+      maxWidthInput.disabled = !enabled;
+      maxHeightInput.disabled = !enabled;
+    }
+
+
     function loadImageFromFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -314,13 +337,13 @@
       return val;
     }
 
-    async function resizeImageBrowser(img, maxWidth, maxHeight) {
+    async function resizeImageBrowser(img, maxWidth, maxHeight, enableResize, outputType = "image/jpeg") {
       let { width, height } = img;
       let newWidth = width;
       let newHeight = height;
       let resized = false;
 
-      if (width > maxWidth || height > maxHeight) {
+      if (enableResize && (width > maxWidth || height > maxHeight)) {
         const scaleW = maxWidth / width;
         const scaleH = maxHeight / height;
         const scale = Math.min(scaleW, scaleH);
@@ -338,12 +361,15 @@
       ctx.fillRect(0, 0, newWidth, newHeight);
       ctx.drawImage(img, 0, 0, newWidth, newHeight);
 
-      const resizedBlob = await canvasToBlob(canvas, "image/jpeg", 0.85);
+      const resizedBlob = await canvasToBlob(canvas, outputType, 0.85);
       return { canvas, resizedBlob, resized, width, height, newWidth, newHeight };
     }
 
-    async function compressImageFromCanvas(canvas, resizedBlob, targetPercent) {
+    async function compressImageFromCanvas(canvas, resizedBlob, targetPercent, outputType = "image/jpeg") {
       const originalSize = resizedBlob.size;
+      if (outputType !== "image/jpeg") {
+        return await canvasToBlob(canvas, outputType, 0.85);
+      }
       const targetRatio = targetPercent / 100;
       const targetSize = originalSize * targetRatio;
       let quality = 0.8;
@@ -384,6 +410,9 @@
 
     clearImagesBtn.addEventListener("click", clearImageTool);
 
+    enableResizeCheckbox.addEventListener("change", syncResizeControls);
+    syncResizeControls();
+
     processImagesBtn.addEventListener("click", async () => {
       if (selectedImgFiles.length === 0) return;
 
@@ -397,6 +426,9 @@
         alert(err.message);
         return;
       }
+
+      const enableResize = enableResizeCheckbox.checked;
+      const convertToJpg = convertToJpgCheckbox.checked;
 
       imgLog(
         `Using max width: ${maxWidth}px, max height: ${maxHeight}px, ` +
@@ -422,6 +454,11 @@
         totalOriginal += file.size;
 
         try {
+          const outputType = convertToJpg
+            ? "image/jpeg"
+            : (/\.png$/i.test(file.name) ? "image/png" : "image/jpeg");
+          const outputName = convertToJpg ? replaceExtensionToJpg(file.name) : file.name;
+
           const img = await loadImageFromFile(file);
           const {
             canvas,
@@ -431,22 +468,25 @@
             height,
             newWidth,
             newHeight
-          } = await resizeImageBrowser(img, maxWidth, maxHeight);
+          } = await resizeImageBrowser(img, maxWidth, maxHeight, enableResize, outputType);
 
           const resizedKB = bytesToKB(resizedBlob.size);
           if (resized) {
             imgLog(`Resized from ${width}x${height} to ${newWidth}x${newHeight}, size ~ ${resizedKB}`);
           } else {
-            imgLog(`No resize needed (${width}x${height}), saved as JPEG ~ ${resizedKB}`);
+            imgLog(`No resize needed (${width}x${height}), saved as ${outputType === "image/png" ? "PNG" : "JPEG"} ~ ${resizedKB}`);
           }
 
-          const compressedBlob = await compressImageFromCanvas(canvas, resizedBlob, targetPercent);
+          const compressedBlob = await compressImageFromCanvas(canvas, resizedBlob, targetPercent, outputType);
           const compressedKB = bytesToKB(compressedBlob.size);
           totalCompressed += compressedBlob.size;
 
-          imgLog(`Compressed to ~ ${compressedKB} (target <= ${targetPercent}% of resized size)`);
+          if (outputType === "image/png") {
+            imgLog(`PNG output created (~ ${compressedKB}); target % is not enforced for PNG.`);
+          } else {
+            imgLog(`Compressed to ~ ${compressedKB} (target <= ${targetPercent}% of resized size)`);
+          }
 
-          const outputName = replaceExtensionToJpg(file.name);
           const url = URL.createObjectURL(compressedBlob);
 
           processedImgResults.push({
