@@ -190,7 +190,7 @@
       <div class="note">
         <strong>Copies rules</strong><br />
         Google: <span class="kbd">Qty</span> · Readmoo: <span class="kbd">銷售數量</span> · Kobo: <span class="kbd">Paid Units</span> ·
-        KDP: <span class="kbd">Net Units Sold</span> · HyRead: <span class="kbd">借閱人數</span> only when <span class="kbd">備註</span> = <span class="kbd">單館採購</span> ·
+        KDP: <span class="kbd">Net Units Sold</span> · HyRead: <span class="kbd">借閱人數</span> when <span class="kbd">備註</span> contains <span class="kbd">單館採購</span> ·
         KoboPlus: not applicable
       </div>
     </div>
@@ -218,17 +218,6 @@
     // =============================
     // Royalty Reporting Tool (browser-only)
     // =============================
-    // Algorithm summary:
-    // 1) User uploads multiple CSV/XLSX files.
-    // 2) For each file:
-    //    - Detect platform by filename keyword.
-    //    - Parse rows.
-    //    - Normalize column names to lowercase.
-    //    - Read title/publisher/royalty.
-    //    - Compute copies using platform-specific mapping.
-    // 3) Combine all rows from all files.
-    // 4) Group by publisher, then title, and build one report CSV per publisher.
-    // 5) Package all per-publisher CSVs into a ZIP for download.
 
     const PLATFORMS = ['Google', 'kobo', 'koboplus', 'readmoo', 'KDP', 'hyread'];
 
@@ -298,7 +287,6 @@
     }
 
     function csvStringify(rows) {
-      // Minimal CSV serializer with quoting
       const esc = (cell) => {
         const s = (cell == null) ? '' : String(cell);
         return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -351,10 +339,15 @@
       if (platform === 'readmoo') return toNumber(rowLower['銷售數量']);
       if (platform === 'kobo') return toNumber(rowLower['paid units']);
       if (platform === 'KDP') return toNumber(rowLower['net units sold']);
+
       if (platform === 'hyread') {
-        const note = safeString(rowLower['備註'], '');
-        return note === '單館採購' ? toNumber(rowLower['借閱人數']) : 0;
+        // ✅ CHANGE: "備註" no longer requires exact match "單館採購"
+        // It only needs to CONTAIN "單館採購" (tolerates extra text, spaces, line breaks).
+        const noteRaw = safeString(rowLower['備註'], '');
+        const noteCompact = noteRaw.replace(/\s+/g, ''); // remove whitespace/newlines
+        return noteCompact.includes('單館採購') ? toNumber(rowLower['借閱人數']) : 0;
       }
+
       // koboplus: not applicable
       return 0;
     }
@@ -363,8 +356,6 @@
       setStatus('Processing…', 'ok');
       log(`Starting processing for ${files.length} file(s).`);
 
-      // Unified dataset for all platforms
-      // Each record: {title, publisher, royalty, copies, platform}
       const allRows = [];
 
       for (const file of files) {
@@ -385,15 +376,10 @@
         for (const raw of rawRows) {
           const row = normalizeKeys(raw);
 
-          // The original Python script requires 'royalty'.
-          // If missing or non-numeric, it becomes 0.
           const royalty = toNumber(row['royalty']);
-
-          // Title/publisher normalization
           const title = safeString(row['title'], '(Missing title)');
           const publisher = safeString(row['publisher'], 'Unknown_Publisher');
 
-          // Platform-specific copies mapping
           const copies = deriveCopies(platform, row);
 
           allRows.push({ title, publisher, royalty, copies, platform });
@@ -406,7 +392,6 @@
 
       log(`Combined dataset: ${allRows.length} row(s).`);
 
-      // Group records by publisher
       const byPublisher = new Map();
       for (const r of allRows) {
         const pub = safeString(r.publisher, 'Unknown_Publisher');
@@ -415,12 +400,11 @@
       }
 
       const expectedColumns = ['Title', 'Sold_Copies', ...PLATFORMS, 'Total'];
-      const outputs = []; // {filename, content}
+      const outputs = [];
 
       for (const [publisher, rows] of byPublisher.entries()) {
         log(`Building report for publisher: ${publisher}`);
 
-        // Group publisher records by title
         const byTitle = new Map();
         for (const r of rows) {
           const t = safeString(r.title, '(Missing title)');
@@ -428,7 +412,6 @@
           byTitle.get(t).push(r);
         }
 
-        // Build one output row per title
         const table = [];
         for (const [title, tRows] of byTitle.entries()) {
           const soldCopies = Math.round(tRows.reduce((acc, x) => acc + (x.copies || 0), 0));
@@ -437,7 +420,9 @@
           let totalRoyalty = 0;
 
           for (const p of PLATFORMS) {
-            const sumP = tRows.filter(x => x.platform === p).reduce((acc, x) => acc + (x.royalty || 0), 0);
+            const sumP = tRows
+              .filter(x => x.platform === p)
+              .reduce((acc, x) => acc + (x.royalty || 0), 0);
             rowOut[p] = Math.round(sumP * 100) / 100;
             totalRoyalty += sumP;
           }
@@ -445,7 +430,6 @@
           table.push(rowOut);
         }
 
-        // Add total row (sum numeric columns)
         const totalRow = { Title: 'Total' };
         for (const col of expectedColumns.slice(1)) totalRow[col] = 0;
 
@@ -459,7 +443,6 @@
         for (const p of PLATFORMS) totalRow[p] = Math.round(totalRow[p] * 100) / 100;
         totalRow['Total'] = Math.round(totalRow['Total'] * 100) / 100;
 
-        // Payable calculation (same logic as the Python script)
         const totalRoyaltyValue = toNumber(totalRow['Total']);
         const distributionFee = Math.round(totalRoyaltyValue * 0.10 * 100) / 100;
         const withdrawalFee = 5.00;
@@ -477,7 +460,6 @@
         csvRows.push(['Payable = Total royalty - 10% distribution fee - 5 USD withdrawal administration fee']);
         csvRows.push([`Total Payable: ${payable.toFixed(2)} USD`]);
 
-        // Add UTF-8 BOM for better Excel compatibility (esp. Chinese columns)
         const csvContent = '\ufeff' + csvStringify(csvRows);
 
         const safePublisher = publisher.replace(/\s+/g, '_');
