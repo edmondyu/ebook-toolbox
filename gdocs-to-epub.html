@@ -286,7 +286,15 @@
 
     <div class="form-group">
       <label for="metadataCSV">Import Metadata from CSV (Optional)</label>
-      <input type="file" id="metadataCSV" accept=".csv" />
+      <div class="drop-zone" id="csvDropZone">
+        <div class="drop-icon">📊</div>
+        <p><strong>Drag and drop CSV file here</strong></p>
+        <p>or</p>
+        <div class="file-input-wrapper">
+          <label for="metadataCSV" class="browse-btn">Browse Files</label>
+          <input type="file" id="metadataCSV" accept=".csv" />
+        </div>
+      </div>
       <div class="hint">Upload a CSV file to auto-fill metadata fields. Only the first data row will be used.</div>
       <button type="button" class="secondary" id="downloadSampleCSV" style="margin-top: 0.5rem;">Download Sample CSV</button>
     </div>
@@ -396,6 +404,7 @@
     const htmlDropZone = document.getElementById('htmlDropZone');
     const imageFolderDropZone = document.getElementById('imageFolderDropZone');
     const coverDropZone = document.getElementById('coverDropZone');
+    const csvDropZone = document.getElementById('csvDropZone');
     const convertBtn = document.getElementById('convertBtn');
     const resetBtn = document.getElementById('resetBtn');
     const progress = document.getElementById('progress');
@@ -485,6 +494,53 @@
           showStatus('Cover image loaded', 'success');
         } else {
           showStatus('Please drop an image file', 'error');
+        }
+      }
+    });
+
+    setupDropZone(csvDropZone, async (e) => {
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        if (file.name.endsWith('.csv')) {
+          try {
+            const csvText = await file.text();
+            const lines = csvText.split(/\r?\n/).filter(line => line.trim());
+
+            if (lines.length < 2) {
+              showStatus('CSV file must have a header row and at least one data row', 'error');
+              return;
+            }
+
+            // Parse header and first data row
+            const headers = parseCSVLine(lines[0]);
+            const values = parseCSVLine(lines[1]);
+
+            // Create a mapping object
+            const csvData = {};
+            headers.forEach((header, index) => {
+              csvData[header.trim()] = values[index] ? values[index].trim() : '';
+            });
+
+            // Map CSV fields to form fields
+            if (csvData.book_title) document.getElementById('bookTitle').value = csvData.book_title;
+            if (csvData.book_subtitle || csvData.subtitle) document.getElementById('bookSubtitle').value = csvData.book_subtitle || csvData.subtitle;
+            if (csvData.author_name) document.getElementById('bookAuthor').value = csvData.author_name;
+            if (csvData.publisher) document.getElementById('bookPublisher').value = csvData.publisher;
+            if (csvData.publish_date) document.getElementById('bookPublishDate').value = csvData.publish_date;
+            if (csvData.language) document.getElementById('bookLanguage').value = csvData.language;
+            if (csvData.book_description) document.getElementById('bookDescription').value = csvData.book_description;
+            if (csvData.author_description) document.getElementById('authorDescription').value = csvData.author_description;
+            if (csvData.isbn) document.getElementById('bookISBN').value = csvData.isbn;
+            if (csvData.tags) document.getElementById('bookTags').value = csvData.tags;
+
+            csvDropZone.classList.add('has-file');
+            showStatus('Metadata imported from CSV successfully', 'success');
+          } catch (error) {
+            showStatus('Error parsing CSV file: ' + error.message, 'error');
+          }
+        } else {
+          showStatus('Please drop a CSV file', 'error');
         }
       }
     });
@@ -818,8 +874,10 @@
       let currentChapter = null;
 
       // Build a flat list of all elements with their types
-      const body = document.createElement('div');
-      body.innerHTML = htmlContent;
+      // Use DOMParser to avoid triggering image downloads (which cause 404 errors)
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+      const body = doc.body;
 
       const walker = document.createTreeWalker(
         body,
