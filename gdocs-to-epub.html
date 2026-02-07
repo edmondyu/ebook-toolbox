@@ -698,7 +698,47 @@ ${bodyContent}
       // Remove empty tags
       html = html.replace(/<[^/>][^>]*>\s*<\/[^>]+>/g, '');
 
+      // Convert HTML entities to numeric entities for XHTML compliance
+      html = convertHTMLEntitiesToNumeric(html);
+
       return html.trim();
+    }
+
+    // Convert common HTML entities to numeric entities for XHTML
+    function convertHTMLEntitiesToNumeric(html) {
+      // First, create a temporary DOM element to decode HTML entities
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+
+      // Get the decoded text (this converts &nbsp; to actual non-breaking space)
+      let decoded = tempDiv.innerHTML;
+
+      // Now replace special characters with numeric entities
+      const charMap = {
+        '\u00A0': '&#160;',  // non-breaking space
+        '\u201C': '&#8220;', // left double quote
+        '\u201D': '&#8221;', // right double quote
+        '\u2018': '&#8216;', // left single quote
+        '\u2019': '&#8217;', // right single quote
+        '\u2014': '&#8212;', // em dash
+        '\u2013': '&#8211;', // en dash
+        '\u2026': '&#8230;', // ellipsis
+        '\u2022': '&#8226;', // bullet
+        '\u00B7': '&#183;',  // middle dot
+        '\u00A9': '&#169;',  // copyright
+        '\u00AE': '&#174;',  // registered
+        '\u2122': '&#8482;', // trademark
+        '\u20AC': '&#8364;', // euro
+        '\u00A3': '&#163;',  // pound
+        '\u00A5': '&#165;'   // yen
+      };
+
+      // Replace each character
+      for (const [char, numeric] of Object.entries(charMap)) {
+        decoded = decoded.split(char).join(numeric);
+      }
+
+      return decoded;
     }
 
     // Generate book CSS
