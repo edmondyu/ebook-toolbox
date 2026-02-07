@@ -710,9 +710,13 @@
         zip.file(`OEBPS/Images/${coverFilename}`, coverData);
       }
 
-      // 4. Add CSS files - only include referenced stylesheets
+      // 4. Add CSS files
       zip.file('OEBPS/Styles/book-style.css', generateBookCSS(splitBy));
+      zip.file('OEBPS/Styles/sgc-nav.css', generateSgcNavCSS());
+      zip.file('OEBPS/Styles/sgc-toc.css', generateSgcTocCSS());
       zip.file('OEBPS/Styles/style-advance.css', generateStyleAdvanceCSS());
+      zip.file('OEBPS/Styles/style-check.css', generateStyleCheckCSS());
+      zip.file('OEBPS/Styles/style-reset.css', generateStyleResetCSS());
       zip.file('OEBPS/Styles/style-standard.css', generateStyleStandardCSS());
 
       // 5. Create chapter XHTML files
@@ -4359,14 +4363,12 @@ ${bodyContent}
     
     function generateBookCSS() {
       return `@charset "UTF-8";
+    @import "style-reset.css";
     @import "style-standard.css";
     @import "style-advance.css";
-    
-    /* -------------------------------------------------------------
-    當使用Windows確認時，請加上下面的CSS。
-    確認完畢後請務必刪除或者放入註解中
     @import "style-check.css";
-    ---------------------------------------------------------------- */
+    @import "sgc-nav.css";
+    @import "sgc-toc.css";
     
     
     
@@ -4858,9 +4860,13 @@ ${navItems}  </ol>
       // Manifest items
       let manifestItems = '';
 
-      // CSS - only include referenced stylesheets
+      // CSS
       manifestItems += '    <item id="book-style.css" href="Styles/book-style.css" media-type="text/css"/>\n';
+      manifestItems += '    <item id="sgc-nav.css" href="Styles/sgc-nav.css" media-type="text/css"/>\n';
+      manifestItems += '    <item id="sgc-toc.css" href="Styles/sgc-toc.css" media-type="text/css"/>\n';
       manifestItems += '    <item id="style-advance.css" href="Styles/style-advance.css" media-type="text/css"/>\n';
+      manifestItems += '    <item id="style-check.css" href="Styles/style-check.css" media-type="text/css"/>\n';
+      manifestItems += '    <item id="style-reset.css" href="Styles/style-reset.css" media-type="text/css"/>\n';
       manifestItems += '    <item id="style-standard.css" href="Styles/style-standard.css" media-type="text/css"/>\n';
 
       // Navigation
