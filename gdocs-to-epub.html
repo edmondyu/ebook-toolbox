@@ -383,10 +383,10 @@
     const status = document.getElementById('status');
 
     // Prevent default drag behaviors on document level
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    // Note: Only preventDefault, not stopPropagation, so events can reach drop zones
+    ['dragenter', 'dragover'].forEach(eventName => {
       document.body.addEventListener(eventName, (e) => {
         e.preventDefault();
-        e.stopPropagation();
       }, false);
     });
 
