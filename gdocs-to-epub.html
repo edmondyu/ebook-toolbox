@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Google Docs to EPUB – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #f5f5f5;
+      color: #111827;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      color: #6b7280;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      margin-bottom: 1.5rem;
+    }
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+    input[type="text"],
+    input[type="file"],
+    textarea {
+      width: 100%;
+      padding: 0.6rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      box-sizing: border-box;
+    }
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+    input[type="file"] {
+      padding: 0.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.7rem 1.3rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    button.primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .progress {
+      background: #e5e7eb;
+      border-radius: 8px;
+      height: 32px;
+      overflow: hidden;
+      margin: 1rem 0;
+      display: none;
+    }
+    .progress-bar {
+      background: #2563eb;
+      height: 100%;
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .status {
+      margin: 1rem 0;
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .status.info {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .status.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .hint {
+      font-size: 0.85rem;
+      color: #6b7280;
+      margin-top: 0.25rem;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 768px) {
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+    }
+    .back-link {
+      display: inline-block;
+      color: #2563eb;
+      text-decoration: none;
+      margin-bottom: 1rem;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="back-link">← Back to Toolbox</a>
+
+  <h1>Google Docs to EPUB Converter</h1>
+  <p class="subtitle">
+    Convert HTML exported from Google Docs to EPUB format with predefined styling
+  </p>
+
+  <div class="card">
+    <h2>Step 1: Upload Files</h2>
+
+    <div class="form-group">
+      <label for="htmlFile">Google Docs HTML File</label>
+      <input type="file" id="htmlFile" accept=".html,.htm" />
+      <div class="hint">Export your Google Doc as "Web Page (.html, zipped)" and upload the HTML file</div>
+    </div>
+
+    <div class="form-group">
+      <label for="imageFolder">Images Folder</label>
+      <input type="file" id="imageFolder" webkitdirectory directory multiple />
+      <div class="hint">Select the "images" folder that came with the HTML export</div>
+    </div>
+
+    <div class="form-group">
+      <label for="coverImage">Cover Image (Optional)</label>
+      <input type="file" id="coverImage" accept="image/*" />
+      <div class="hint">Upload a cover image for your EPUB (recommended size: 600x800 or similar)</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Step 2: Book Metadata</h2>
+
+    <div class="two-col">
+      <div class="form-group">
+        <label for="bookTitle">Book Title *</label>
+        <input type="text" id="bookTitle" placeholder="Enter book title" required />
+      </div>
+
+      <div class="form-group">
+        <label for="bookAuthor">Author *</label>
+        <input type="text" id="bookAuthor" placeholder="Author name" required />
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="form-group">
+        <label for="bookPublisher">Publisher</label>
+        <input type="text" id="bookPublisher" placeholder="Publisher name" />
+      </div>
+
+      <div class="form-group">
+        <label for="bookLanguage">Language Code</label>
+        <input type="text" id="bookLanguage" placeholder="en, zh, zh-TW, etc." value="en" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="bookDescription">Description</label>
+      <textarea id="bookDescription" placeholder="Book description (optional)"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="bookISBN">ISBN (Optional)</label>
+      <input type="text" id="bookISBN" placeholder="978-XXXXXXXXXX" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Step 3: Chapter Settings</h2>
+
+    <div class="form-group">
+      <label for="splitBy">Split Document Into Chapters By:</label>
+      <select id="splitBy" style="width: 100%; padding: 0.6rem; border: 1px solid #d1d5db; border-radius: 6px;">
+        <option value="h1">H1 Headings (Main Titles)</option>
+        <option value="h2" selected>H2 Headings (Section Titles)</option>
+        <option value="h3">H3 Headings (Subsections)</option>
+        <option value="none">Keep as Single File</option>
+      </select>
+      <div class="hint">Choose how to split the document into separate XHTML chapter files</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <button class="primary" id="convertBtn">Convert to EPUB</button>
+    <button class="secondary" id="resetBtn">Reset</button>
+
+    <div class="progress" id="progress">
+      <div class="progress-bar" id="progressBar">0%</div>
+    </div>
+
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    // Global state
+    let htmlContent = null;
+    let imageFiles = {};
+    let coverImageFile = null;
+
+    // DOM elements
+    const htmlFileInput = document.getElementById('htmlFile');
+    const imageFolderInput = document.getElementById('imageFolder');
+    const coverImageInput = document.getElementById('coverImage');
+    const convertBtn = document.getElementById('convertBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const progress = document.getElementById('progress');
+    const progressBar = document.getElementById('progressBar');
+    const status = document.getElementById('status');
+
+    // File inputs
+    htmlFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        htmlContent = await file.text();
+        showStatus('HTML file loaded', 'success');
+      }
+    });
+
+    imageFolderInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files);
+      imageFiles = {};
+      files.forEach(file => {
+        // Store by filename (not full path)
+        const filename = file.name;
+        imageFiles[filename] = file;
+      });
+      showStatus(`${files.length} images loaded`, 'success');
+    });
+
+    coverImageInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        coverImageFile = file;
+        showStatus('Cover image loaded', 'success');
+      }
+    });
+
+    // Reset button
+    resetBtn.addEventListener('click', () => {
+      htmlFileInput.value = '';
+      imageFolderInput.value = '';
+      coverImageInput.value = '';
+      document.getElementById('bookTitle').value = '';
+      document.getElementById('bookAuthor').value = '';
+      document.getElementById('bookPublisher').value = '';
+      document.getElementById('bookLanguage').value = 'en';
+      document.getElementById('bookDescription').value = '';
+      document.getElementById('bookISBN').value = '';
+      htmlContent = null;
+      imageFiles = {};
+      coverImageFile = null;
+      hideProgress();
+      hideStatus();
+    });
+
+    // Main convert button
+    convertBtn.addEventListener('click', async () => {
+      // Validate inputs
+      if (!htmlContent) {
+        showStatus('Please upload an HTML file', 'error');
+        return;
+      }
+
+      const bookTitle = document.getElementById('bookTitle').value.trim();
+      const bookAuthor = document.getElementById('bookAuthor').value.trim();
+
+      if (!bookTitle || !bookAuthor) {
+        showStatus('Please enter book title and author', 'error');
+        return;
+      }
+
+      // Disable button during processing
+      convertBtn.disabled = true;
+      showProgress('Processing...', 0);
+
+      try {
+        await convertToEPUB();
+      } catch (err) {
+        showStatus('Error: ' + err.message, 'error');
+        console.error(err);
+      } finally {
+        convertBtn.disabled = false;
+      }
+    });
+
+    // Main conversion function
+    async function convertToEPUB() {
+      showProgress('Parsing HTML...', 10);
+
+      // Parse HTML
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+
+      // Extract metadata
+      const metadata = {
+        title: document.getElementById('bookTitle').value.trim(),
+        author: document.getElementById('bookAuthor').value.trim(),
+        publisher: document.getElementById('bookPublisher').value.trim(),
+        language: document.getElementById('bookLanguage').value.trim() || 'en',
+        description: document.getElementById('bookDescription').value.trim(),
+        isbn: document.getElementById('bookISBN').value.trim(),
+        uuid: generateUUID()
+      };
+
+      showProgress('Extracting content...', 20);
+
+      // Extract and clean content
+      const content = extractContent(doc);
+
+      showProgress('Splitting chapters...', 30);
+
+      // Split into chapters
+      const splitBy = document.getElementById('splitBy').value;
+      const chapters = splitChapters(content, splitBy);
+
+      showProgress('Processing images...', 40);
+
+      // Process images
+      const processedImages = await processImages(content.images);
+
+      showProgress('Generating EPUB structure...', 50);
+
+      // Create EPUB
+      const epub = await createEPUB(metadata, chapters, processedImages);
+
+      showProgress('Packaging EPUB...', 80);
+
+      // Generate ZIP
+      const blob = await epub.generateAsync({
+        type: 'blob',
+        mimeType: 'application/epub+zip',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 9 }
+      });
+
+      showProgress('Complete!', 100);
+
+      // Download
+      const filename = sanitizeFilename(metadata.title) + '.epub';
+      downloadBlob(blob, filename);
+
+      showStatus('EPUB created successfully! Download started.', 'success');
+      setTimeout(hideProgress, 2000);
+    }
+
+    // Extract content from Google Docs HTML
+    function extractContent(doc) {
+      const body = doc.body;
+      const content = {
+        title: '',
+        paragraphs: [],
+        headings: [],
+        images: [],
+        links: []
+      };
+
+      // Find all elements in order
+      const elements = body.querySelectorAll('h1, h2, h3, p, ul, ol, img');
+
+      elements.forEach((el, index) => {
+        if (el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'H3') {
+          const heading = {
+            level: parseInt(el.tagName.charAt(1)),
+            text: el.textContent.trim(),
+            id: el.id || `heading-${index}`,
+            element: el
+          };
+          content.headings.push(heading);
+        } else if (el.tagName === 'P') {
+          // Skip empty paragraphs
+          if (el.textContent.trim() || el.querySelector('img')) {
+            content.paragraphs.push(el);
+          }
+        } else if (el.tagName === 'UL' || el.tagName === 'OL') {
+          content.paragraphs.push(el);
+        } else if (el.tagName === 'IMG') {
+          const img = {
+            src: el.getAttribute('src'),
+            alt: el.getAttribute('alt') || '',
+            index: content.images.length
+          };
+          content.images.push(img);
+        }
+      });
+
+      return content;
+    }
+
+    // Split content into chapters
+    function splitChapters(content, splitBy) {
+      if (splitBy === 'none') {
+        return [{
+          title: content.headings[0]?.text || 'Content',
+          content: content.paragraphs,
+          index: 0
+        }];
+      }
+
+      const splitLevel = parseInt(splitBy.charAt(1));
+      const chapters = [];
+      let currentChapter = null;
+
+      // Build a flat list of all elements with their types
+      const allElements = [];
+      const body = document.createElement('div');
+      body.innerHTML = htmlContent;
+
+      const walker = document.createTreeWalker(
+        body,
+        NodeFilter.SHOW_ELEMENT,
+        {
+          acceptNode: function(node) {
+            if (['H1', 'H2', 'H3', 'P', 'UL', 'OL'].includes(node.tagName)) {
+              return NodeFilter.FILTER_ACCEPT;
+            }
+            return NodeFilter.FILTER_SKIP;
+          }
+        }
+      );
+
+      let node;
+      while (node = walker.nextNode()) {
+        allElements.push(node);
+      }
+
+      // Split based on headings
+      allElements.forEach((el, index) => {
+        const tagName = el.tagName;
+        const level = ['H1', 'H2', 'H3'].includes(tagName) ? parseInt(tagName.charAt(1)) : 0;
+
+        if (level === splitLevel) {
+          // Start new chapter
+          if (currentChapter) {
+            chapters.push(currentChapter);
+          }
+          currentChapter = {
+            title: el.textContent.trim(),
+            content: [el],
+            index: chapters.length
+          };
+        } else if (currentChapter) {
+          // Add to current chapter
+          currentChapter.content.push(el);
+        } else {
+          // Before first chapter, create intro
+          if (chapters.length === 0) {
+            currentChapter = {
+              title: 'Introduction',
+              content: [el],
+              index: 0
+            };
+          }
+        }
+      });
+
+      // Add last chapter
+      if (currentChapter) {
+        chapters.push(currentChapter);
+      }
+
+      return chapters.length > 0 ? chapters : [{
+        title: 'Content',
+        content: allElements,
+        index: 0
+      }];
+    }
+
+    // Process images
+    async function processImages(imageRefs) {
+      const processed = [];
+
+      for (let i = 0; i < imageRefs.length; i++) {
+        const imgRef = imageRefs[i];
+        const originalFilename = imgRef.src.split('/').pop();
+
+        let imageFile = imageFiles[originalFilename];
+
+        if (imageFile) {
+          const arrayBuffer = await imageFile.arrayBuffer();
+          const extension = imageFile.name.split('.').pop().toLowerCase();
+          const newFilename = `image-${String(i + 1).padStart(3, '0')}.${extension}`;
+
+          processed.push({
+            filename: newFilename,
+            data: arrayBuffer,
+            mediaType: extension === 'png' ? 'image/png' : 'image/jpeg',
+            originalSrc: imgRef.src
+          });
+        }
+      }
+
+      return processed;
+    }
+
+    // Create EPUB structure
+    async function createEPUB(metadata, chapters, images) {
+      const zip = new JSZip();
+
+      // 1. mimetype (uncompressed)
+      zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+
+      // 2. META-INF/container.xml
+      const containerXML = `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`;
+      zip.file('META-INF/container.xml', containerXML);
+
+      // 3. Add images
+      for (const img of images) {
+        zip.file(`OEBPS/Images/${img.filename}`, img.data);
+      }
+
+      // Add cover if provided
+      if (coverImageFile) {
+        const coverData = await coverImageFile.arrayBuffer();
+        const coverExt = coverImageFile.name.split('.').pop().toLowerCase();
+        const coverFilename = `cover.${coverExt}`;
+        zip.file(`OEBPS/Images/${coverFilename}`, coverData);
+      }
+
+      // 4. Add CSS files
+      zip.file('OEBPS/Styles/book-style.css', generateBookCSS());
+
+      // 5. Create chapter XHTML files
+      const chapterFiles = [];
+      for (let i = 0; i < chapters.length; i++) {
+        const chapter = chapters[i];
+        const filename = `chapter_${String(i + 1).padStart(3, '0')}.xhtml`;
+        const xhtml = generateChapterXHTML(chapter, metadata.language, images);
+        zip.file(`OEBPS/Text/${filename}`, xhtml);
+        chapterFiles.push({ filename, title: chapter.title, index: i });
+      }
+
+      // 6. Create nav.xhtml
+      const navXHTML = generateNavXHTML(chapterFiles, metadata);
+      zip.file('OEBPS/Text/nav.xhtml', navXHTML);
+
+      // 7. Create content.opf
+      const contentOPF = generateContentOPF(metadata, chapterFiles, images);
+      zip.file('OEBPS/content.opf', contentOPF);
+
+      // 8. Create toc.ncx
+      const tocNCX = generateTocNCX(metadata, chapterFiles);
+      zip.file('OEBPS/toc.ncx', tocNCX);
+
+      return zip;
+    }
+
+    // Generate chapter XHTML
+    function generateChapterXHTML(chapter, language, images) {
+      let bodyContent = '';
+
+      chapter.content.forEach(el => {
+        const html = cleanElementHTML(el, images);
+        if (html) {
+          bodyContent += html + '\n';
+        }
+      });
+
+      return `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${language}" lang="${language}">
+<head>
+<meta charset="UTF-8"/>
+<title>${escapeXML(chapter.title)}</title>
+<link rel="stylesheet" type="text/css" href="../Styles/book-style.css"/>
+</head>
+<body>
+${bodyContent}
+</body>
+</html>`;
+    }
+
+    // Clean HTML element for EPUB
+    function cleanElementHTML(el, images) {
+      const tagName = el.tagName;
+
+      if (tagName === 'H1') {
+        return `<h1>${escapeXML(el.textContent.trim())}</h1>`;
+      } else if (tagName === 'H2') {
+        return `<h2>${escapeXML(el.textContent.trim())}</h2>`;
+      } else if (tagName === 'H3') {
+        return `<h3>${escapeXML(el.textContent.trim())}</h3>`;
+      } else if (tagName === 'P') {
+        // Check for images
+        const img = el.querySelector('img');
+        if (img) {
+          const src = img.getAttribute('src');
+          const imgObj = images.find(i => i.originalSrc === src);
+          if (imgObj) {
+            return `<p><img class="fit" alt="" src="../Images/${imgObj.filename}"/></p>`;
+          }
+        }
+
+        // Clean text content
+        let text = cleanTextContent(el);
+        if (text.trim()) {
+          return `<p>${text}</p>`;
+        }
+        return '';
+      } else if (tagName === 'UL') {
+        let items = '';
+        el.querySelectorAll('li').forEach(li => {
+          const text = cleanTextContent(li);
+          if (text.trim()) {
+            items += `  <li>${text}</li>\n`;
+          }
+        });
+        return items ? `<ul>\n${items}</ul>` : '';
+      } else if (tagName === 'OL') {
+        let items = '';
+        el.querySelectorAll('li').forEach(li => {
+          const text = cleanTextContent(li);
+          if (text.trim()) {
+            items += `  <li>${text}</li>\n`;
+          }
+        });
+        return items ? `<ol>\n${items}</ol>` : '';
+      }
+
+      return '';
+    }
+
+    // Clean text content while preserving formatting
+    function cleanTextContent(el) {
+      let html = el.innerHTML;
+
+      // Remove Google Docs specific classes and styles
+      html = html.replace(/class="[^"]*"/g, '');
+      html = html.replace(/style="[^"]*"/g, '');
+      html = html.replace(/id="[^"]*"/g, '');
+
+      // Convert Google Docs links to clean links
+      html = html.replace(/<a\s+[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gi, (match, href, text) => {
+        // Clean Google redirect URLs
+        if (href.includes('www.google.com/url?q=')) {
+          const urlMatch = href.match(/[?&]q=([^&]+)/);
+          if (urlMatch) {
+            href = decodeURIComponent(urlMatch[1]);
+          }
+        }
+        return `<a href="${escapeXML(href)}">${text}</a>`;
+      });
+
+      // Remove spans but keep content
+      html = html.replace(/<span[^>]*>/g, '');
+      html = html.replace(/<\/span>/g, '');
+
+      // Remove empty tags
+      html = html.replace(/<[^/>][^>]*>\s*<\/[^>]+>/g, '');
+
+      return html.trim();
+    }
+
+    // Generate book CSS
+    function generateBookCSS() {
+      return `/* EPUB Book Styles */
+
+body {
+  font-family: serif;
+  line-height: 1.6;
+  margin: 1em;
+}
+
+h1, h2, h3 {
+  font-weight: bold;
+  line-height: 1.2;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+h1 {
+  font-size: 1.8em;
+  text-align: center;
+}
+
+h2 {
+  font-size: 1.5em;
+}
+
+h3 {
+  font-size: 1.2em;
+}
+
+p {
+  margin: 0.5em 0;
+  text-align: justify;
+  text-indent: 2em;
+}
+
+p.no-indent {
+  text-indent: 0;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1em auto;
+}
+
+img.fit {
+  width: 100%;
+}
+
+ul, ol {
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+li {
+  margin: 0.3em 0;
+}
+
+a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Footnotes */
+.footnote {
+  font-size: 0.9em;
+  margin: 1em 0;
+}
+
+sup {
+  font-size: 0.75em;
+  vertical-align: super;
+}
+
+/* Navigation */
+nav#toc ol {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+nav#toc a {
+  display: block;
+  padding: 0.3em 0;
+}`;
+    }
+
+    // Generate navigation XHTML
+    function generateNavXHTML(chapters, metadata) {
+      let navItems = '';
+      chapters.forEach((ch, i) => {
+        navItems += `    <li><a href="${ch.filename}">${escapeXML(ch.title)}</a></li>\n`;
+      });
+
+      return `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${metadata.language}" lang="${metadata.language}">
+<head>
+<meta charset="UTF-8"/>
+<title>Table of Contents</title>
+<link rel="stylesheet" type="text/css" href="../Styles/book-style.css"/>
+</head>
+<body>
+<nav id="toc" epub:type="toc">
+  <h1>Table of Contents</h1>
+  <ol>
+${navItems}  </ol>
+</nav>
+</body>
+</html>`;
+    }
+
+    // Generate content.opf
+    function generateContentOPF(metadata, chapters, images) {
+      const now = new Date().toISOString();
+
+      // Manifest items
+      let manifestItems = '';
+
+      // CSS
+      manifestItems += '    <item id="book-style.css" href="Styles/book-style.css" media-type="text/css"/>\n';
+
+      // Navigation
+      manifestItems += '    <item id="nav" href="Text/nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>\n';
+
+      // Chapters
+      chapters.forEach((ch, i) => {
+        manifestItems += `    <item id="chapter${i+1}" href="Text/${ch.filename}" media-type="application/xhtml+xml"/>\n`;
+      });
+
+      // Images
+      images.forEach((img, i) => {
+        const id = img.filename.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]/g, '-');
+        manifestItems += `    <item id="${id}" href="Images/${img.filename}" media-type="${img.mediaType}"/>\n`;
+      });
+
+      // Cover image if exists
+      if (coverImageFile) {
+        const coverExt = coverImageFile.name.split('.').pop().toLowerCase();
+        const coverMediaType = coverExt === 'png' ? 'image/png' : 'image/jpeg';
+        manifestItems += `    <item id="cover-image" href="Images/cover.${coverExt}" media-type="${coverMediaType}" properties="cover-image"/>\n`;
+      }
+
+      // Spine itemrefs
+      let spineItems = '';
+      chapters.forEach((ch, i) => {
+        spineItems += `    <itemref idref="chapter${i+1}"/>\n`;
+      });
+
+      return `<?xml version="1.0" encoding="utf-8"?>
+<package version="3.0" unique-identifier="BookId" xmlns="http://www.idpf.org/2007/opf">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>${escapeXML(metadata.title)}</dc:title>
+    <dc:creator>${escapeXML(metadata.author)}</dc:creator>
+    ${metadata.publisher ? `<dc:publisher>${escapeXML(metadata.publisher)}</dc:publisher>\n    ` : ''}${metadata.description ? `<dc:description>${escapeXML(metadata.description)}</dc:description>\n    ` : ''}<dc:language>${metadata.language}</dc:language>
+    ${metadata.isbn ? `<dc:identifier>urn:isbn:${metadata.isbn}</dc:identifier>\n    ` : ''}<dc:identifier id="BookId">urn:uuid:${metadata.uuid}</dc:identifier>
+    <meta property="dcterms:modified">${now}</meta>
+  </metadata>
+  <manifest>
+${manifestItems}  </manifest>
+  <spine>
+${spineItems}  </spine>
+</package>`;
+    }
+
+    // Generate toc.ncx
+    function generateTocNCX(metadata, chapters) {
+      let navPoints = '';
+      chapters.forEach((ch, i) => {
+        navPoints += `    <navPoint id="navPoint-${i+1}" playOrder="${i+1}">
+      <navLabel>
+        <text>${escapeXML(ch.title)}</text>
+      </navLabel>
+      <content src="Text/${ch.filename}"/>
+    </navPoint>\n`;
+      });
+
+      return `<?xml version="1.0" encoding="utf-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="urn:uuid:${metadata.uuid}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle>
+    <text>${escapeXML(metadata.title)}</text>
+  </docTitle>
+  <navMap>
+${navPoints}  </navMap>
+</ncx>`;
+    }
+
+    // Helper functions
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
+    function escapeXML(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    }
+
+    function sanitizeFilename(str) {
+      return str.replace(/[^a-zA-Z0-9-_]/g, '_');
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function showProgress(message, percent) {
+      progress.style.display = 'block';
+      progressBar.style.width = percent + '%';
+      progressBar.textContent = message + ' ' + percent + '%';
+    }
+
+    function hideProgress() {
+      progress.style.display = 'none';
+    }
+
+    function showStatus(message, type) {
+      status.textContent = message;
+      status.className = 'status ' + type;
+      status.style.display = 'block';
+    }
+
+    function hideStatus() {
+      status.style.display = 'none';
+    }
+  </script>
+</body>
+</html>

@@ -88,6 +88,19 @@ Consolidate royalty reports from multiple platforms into unified summaries.
 - ✅ **Sales counting** — applies platform-specific rules to count sold copies
 - ✅ **ZIP download** — packages all summary reports together
 
+### 10. Google Docs to EPUB Converter
+Convert HTML files exported from Google Docs into professionally formatted EPUB ebooks.
+
+**Features:**
+- ✅ **Google Docs HTML parsing** — intelligently processes Google Docs HTML exports
+- ✅ **Automatic chapter splitting** — split by H1, H2, H3 headings or keep as single file
+- ✅ **Image processing** — handles images from Google Docs exports
+- ✅ **Metadata editor** — add title, author, publisher, ISBN, description
+- ✅ **Clean XHTML output** — generates valid EPUB 3.0 format
+- ✅ **Custom styling** — includes predefined CSS for professional appearance
+- ✅ **Table of contents** — automatically generates navigation from headings
+- ✅ **Cover image support** — optional cover image upload
+
 ---
 
 ## 🎯 Key Benefits
@@ -254,6 +267,7 @@ Because these are static HTML files, you can deploy them almost anywhere:
 ├── text-splitter.html           # Text file chapter splitter
 ├── xhtml-converter.html         # Text to XHTML converter
 ├── royalty-reporting.html       # Royalty report consolidator
+├── gdocs-to-epub.html           # Google Docs to EPUB converter
 └── README.md                    # This file
 ```
 
