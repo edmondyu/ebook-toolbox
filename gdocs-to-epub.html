@@ -909,6 +909,10 @@ ${bodyContent}
         if (href.startsWith('#note_') || href.startsWith('#back_note_')) {
           return match;
         }
+        // Remove internal fragment links (Google Docs IDs) - just keep the text
+        if (href.startsWith('#')) {
+          return text;
+        }
         // Clean Google redirect URLs
         if (href.includes('www.google.com/url?q=')) {
           const urlMatch = href.match(/[?&]q=([^&]+)/);
