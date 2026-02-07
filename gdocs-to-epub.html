@@ -415,6 +415,8 @@
     });
 
     htmlDropZone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const files = e.dataTransfer.files;
       if (files.length > 0) {
         const file = files[0];
@@ -429,6 +431,8 @@
     }, false);
 
     imageFolderDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const files = Array.from(e.dataTransfer.files);
       const imageFilesList = files.filter(file => file.type.startsWith('image/'));
       if (imageFilesList.length > 0) {
@@ -444,6 +448,8 @@
     }, false);
 
     coverDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const files = e.dataTransfer.files;
       if (files.length > 0) {
         const file = files[0];
@@ -513,6 +519,7 @@
 
           // Map CSV fields to form fields
           if (csvData.book_title) document.getElementById('bookTitle').value = csvData.book_title;
+          if (csvData.book_subtitle || csvData.subtitle) document.getElementById('bookSubtitle').value = csvData.book_subtitle || csvData.subtitle;
           if (csvData.author_name) document.getElementById('bookAuthor').value = csvData.author_name;
           if (csvData.publisher) document.getElementById('bookPublisher').value = csvData.publisher;
           if (csvData.publish_date) document.getElementById('bookPublishDate').value = csvData.publish_date;
