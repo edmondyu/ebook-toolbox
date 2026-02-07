@@ -447,7 +447,6 @@
       let currentChapter = null;
 
       // Build a flat list of all elements with their types
-      const allElements = [];
       const body = document.createElement('div');
       body.innerHTML = htmlContent;
 
@@ -464,12 +463,39 @@
         }
       );
 
+      // First pass: separate footnote definitions from regular content
+      const allElements = [];
+      const footnoteDefinitions = new Map(); // Map footnote number to DIV element
+
       let node;
       while (node = walker.nextNode()) {
+        // Check if this is a footnote definition DIV
+        if (node.tagName === 'DIV') {
+          const footnotePara = node.querySelector('p');
+          if (footnotePara) {
+            const footnoteLink = footnotePara.querySelector('a[href^="#ftnt_ref"], a[id^="ftnt"]');
+            if (footnoteLink) {
+              // This is a footnote definition - extract the number
+              let num = null;
+              if (footnoteLink.id && footnoteLink.id.match(/^ftnt\d+$/)) {
+                num = footnoteLink.id.replace('ftnt', '');
+              } else if (footnoteLink.getAttribute('href') && footnoteLink.getAttribute('href').match(/#ftnt_ref\d+/)) {
+                const match = footnoteLink.getAttribute('href').match(/#ftnt_ref(\d+)/);
+                if (match) {
+                  num = match[1];
+                }
+              }
+              if (num) {
+                footnoteDefinitions.set(num, node);
+                continue; // Don't add to allElements
+              }
+            }
+          }
+        }
         allElements.push(node);
       }
 
-      // Split based on headings
+      // Second pass: split into chapters and track footnote references
       allElements.forEach((el, index) => {
         const tagName = el.tagName;
         const level = ['H1', 'H2', 'H3'].includes(tagName) ? parseInt(tagName.charAt(1)) : 0;
@@ -482,7 +508,8 @@
           currentChapter = {
             title: el.textContent.trim(),
             content: [el],
-            index: chapters.length
+            index: chapters.length,
+            footnoteRefs: new Set() // Track which footnotes are referenced
           };
         } else if (currentChapter) {
           // Add to current chapter
@@ -493,9 +520,22 @@
             currentChapter = {
               title: 'Introduction',
               content: [el],
-              index: 0
+              index: 0,
+              footnoteRefs: new Set()
             };
           }
+        }
+
+        // Scan element for footnote references
+        if (currentChapter) {
+          const footnoteRefs = el.querySelectorAll('a[href^="#ftnt"]');
+          footnoteRefs.forEach(ref => {
+            const href = ref.getAttribute('href');
+            const match = href.match(/#ftnt(\d+)/);
+            if (match) {
+              currentChapter.footnoteRefs.add(match[1]);
+            }
+          });
         }
       });
 
@@ -503,6 +543,17 @@
       if (currentChapter) {
         chapters.push(currentChapter);
       }
+
+      // Third pass: add footnote definitions to the chapters that reference them
+      chapters.forEach(chapter => {
+        if (chapter.footnoteRefs) {
+          chapter.footnoteRefs.forEach(num => {
+            if (footnoteDefinitions.has(num)) {
+              chapter.content.push(footnoteDefinitions.get(num));
+            }
+          });
+        }
+      });
 
       return chapters.length > 0 ? chapters : [{
         title: 'Content',
