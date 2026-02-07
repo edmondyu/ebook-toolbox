@@ -761,9 +761,22 @@
         }
       });
 
-      // Add footnotes at the end of the chapter
+      // Filter footnotes to only include those with actual references in the body
       if (footnotes.length > 0) {
-        bodyContent += '\n' + footnotes.join('\n\n') + '\n';
+        const validFootnotes = footnotes.filter(footnoteHTML => {
+          // Extract footnote number from the footnote HTML
+          const match = footnoteHTML.match(/id="note_(\d+)"/);
+          if (match) {
+            const num = match[1];
+            // Check if there's a corresponding reference in the body
+            return bodyContent.includes(`id="back_note_${num}"`);
+          }
+          return false;
+        });
+
+        if (validFootnotes.length > 0) {
+          bodyContent += '\n' + validFootnotes.join('\n\n') + '\n';
+        }
       }
 
       return `<?xml version="1.0" encoding="utf-8"?>
