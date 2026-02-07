@@ -195,8 +195,11 @@
       </div>
 
       <div class="form-group">
-        <label for="bookLanguage">Language Code</label>
-        <input type="text" id="bookLanguage" placeholder="en, zh, zh-TW, etc." value="en" />
+        <label for="bookLanguage">Language</label>
+        <select id="bookLanguage">
+          <option value="zh" selected>Chinese (zh)</option>
+          <option value="en">English (en)</option>
+        </select>
       </div>
     </div>
 
@@ -289,7 +292,7 @@
       document.getElementById('bookTitle').value = '';
       document.getElementById('bookAuthor').value = '';
       document.getElementById('bookPublisher').value = '';
-      document.getElementById('bookLanguage').value = 'en';
+      document.getElementById('bookLanguage').value = 'zh';
       document.getElementById('bookDescription').value = '';
       document.getElementById('bookISBN').value = '';
       htmlContent = null;
@@ -342,7 +345,7 @@
         title: document.getElementById('bookTitle').value.trim(),
         author: document.getElementById('bookAuthor').value.trim(),
         publisher: document.getElementById('bookPublisher').value.trim(),
-        language: document.getElementById('bookLanguage').value.trim() || 'en',
+        language: document.getElementById('bookLanguage').value.trim() || 'zh',
         description: document.getElementById('bookDescription').value.trim(),
         isbn: document.getElementById('bookISBN').value.trim(),
         uuid: generateUUID()
@@ -4999,12 +5002,12 @@ ${navItems}  </ol>
     ${metadata.publisher ? `<dc:publisher>${escapeXML(metadata.publisher)}</dc:publisher>\n    ` : ''}${metadata.description ? `<dc:description>${escapeXML(metadata.description)}</dc:description>\n    ` : ''}<dc:language>${metadata.language}</dc:language>
     ${metadata.isbn ? `<dc:identifier>urn:isbn:${metadata.isbn}</dc:identifier>\n    ` : ''}<dc:identifier id="BookId">urn:uuid:${metadata.uuid}</dc:identifier>
     <meta property="dcterms:modified">${now}</meta>
-  </metadata>
+    ${coverImageFile ? '<meta name="cover" content="cover-image"/>\n    ' : ''}</metadata>
   <manifest>
 ${manifestItems}  </manifest>
   <spine>
 ${spineItems}  </spine>
-</package>`;
+  ${coverImageFile ? '<guide>\n    <reference type="cover" title="Cover" href="Text/cover.xhtml"/>\n  </guide>\n  ' : ''}</package>`;
     }
 
     // Generate toc.ncx
