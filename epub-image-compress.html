@@ -456,7 +456,7 @@
             // Remove old file and add new one
             zip.remove(imageFile.path);
           }
-          zip.file(outputPath, compressedBlob);
+          zip.file(outputPath, compressedBlob, { compression: 'DEFLATE', compressionOptions: { level: 9 } });
 
           processedCount++;
           const percent = 30 + (processedCount / imageFiles.length) * 60;
@@ -465,12 +465,10 @@
 
         showProgress('Creating compressed EPUB...', 95);
 
-        // Generate the new EPUB
+        // Generate the new EPUB, reusing original compression for untouched files
         const compressedEpub = await zip.generateAsync({
           type: 'blob',
-          mimeType: 'application/epub+zip',
-          compression: 'DEFLATE',
-          compressionOptions: { level: 9 }
+          mimeType: 'application/epub+zip'
         });
 
         showProgress('Download ready!', 100);
