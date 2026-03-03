@@ -5464,6 +5464,9 @@ ${navItems}  </ol>
       manifestItems += '    <item id="style-reset.css" href="Styles/style-reset.css" media-type="text/css"/>\n';
       manifestItems += '    <item id="style-standard.css" href="Styles/style-standard.css" media-type="text/css"/>\n';
 
+      // NCX
+      manifestItems += '    <item id="ncx" href="ncx/toc.ncx" media-type="application/x-dtbncx+xml"/>\n';
+
       // Navigation
       manifestItems += '    <item id="nav" href="Text/nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>\n';
 
@@ -5525,7 +5528,7 @@ ${navItems}  </ol>
     ${coverImageFile ? '<meta name="cover" content="cover-image"/>\n    ' : ''}</metadata>
   <manifest>
 ${manifestItems}  </manifest>
-  <spine>
+  <spine toc="ncx">
 ${spineItems}  </spine>
   ${coverImageFile ? '<guide>\n    <reference type="cover" title="Cover" href="Text/cover.xhtml"/>\n  </guide>\n  ' : ''}</package>`;
     }
