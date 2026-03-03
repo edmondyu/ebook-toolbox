@@ -1303,7 +1303,7 @@
 
       // 8. Create toc.ncx
       const tocNCX = generateTocNCX(metadata, chapterFiles);
-      zip.file('OEBPS/toc.ncx', tocNCX);
+      zip.file('OEBPS/ncx/toc.ncx', tocNCX);
 
       return zip;
     }
@@ -5538,7 +5538,7 @@ ${spineItems}  </spine>
       <navLabel>
         <text>${escapeXML(ch.title)}</text>
       </navLabel>
-      <content src="Text/${ch.filename}"/>
+      <content src="../Text/${ch.filename}"/>
     </navPoint>\n`;
       });
 
