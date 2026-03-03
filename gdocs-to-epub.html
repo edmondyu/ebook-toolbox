@@ -523,16 +523,16 @@
         if (file.name.endsWith('.csv')) {
           try {
             const csvText = await file.text();
-            const lines = csvText.split(/\r?\n/).filter(line => line.trim());
+            const rows = parseCSVRows(csvText);
 
-            if (lines.length < 2) {
+            if (rows.length < 2) {
               showStatus('CSV file must have a header row and at least one data row', 'error');
               return;
             }
 
             // Parse header and first data row
-            const headers = parseCSVLine(lines[0]);
-            const values = parseCSVLine(lines[1]);
+            const headers = rows[0];
+            const values = rows[1];
 
             // Create a mapping object
             const csvData = {};
@@ -600,16 +600,16 @@
       if (file) {
         try {
           const csvText = await file.text();
-          const lines = csvText.split(/\r?\n/).filter(line => line.trim());
+          const rows = parseCSVRows(csvText);
 
-          if (lines.length < 2) {
+          if (rows.length < 2) {
             showStatus('CSV file must have a header row and at least one data row', 'error');
             return;
           }
 
           // Parse header and first data row
-          const headers = parseCSVLine(lines[0]);
-          const values = parseCSVLine(lines[1]);
+          const headers = rows[0];
+          const values = rows[1];
 
           // Create a mapping object
           const csvData = {};
@@ -650,37 +650,49 @@
       showStatus('Sample CSV downloaded', 'success');
     });
 
-    // Helper function to parse a CSV line (handles quoted fields)
-    function parseCSVLine(line) {
-      const result = [];
+    // Helper function to parse full CSV text (handles quoted fields with embedded newlines)
+    function parseCSVRows(text) {
+      const rows = [];
+      let row = [];
       let current = '';
       let inQuotes = false;
 
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const nextChar = line[i + 1];
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1];
 
         if (char === '"') {
           if (inQuotes && nextChar === '"') {
-            // Escaped quote
             current += '"';
             i++;
           } else {
-            // Toggle quote mode
             inQuotes = !inQuotes;
           }
         } else if (char === ',' && !inQuotes) {
-          // Field separator
-          result.push(current);
+          row.push(current);
           current = '';
+        } else if (char === '\r' && nextChar === '\n' && !inQuotes) {
+          row.push(current);
+          current = '';
+          rows.push(row);
+          row = [];
+          i++;
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+          row.push(current);
+          current = '';
+          rows.push(row);
+          row = [];
         } else {
           current += char;
         }
       }
 
-      // Add the last field
-      result.push(current);
-      return result;
+      if (current !== '' || row.length > 0) {
+        row.push(current);
+        rows.push(row);
+      }
+
+      return rows.filter(r => r.some(f => f.trim() !== ''));
     }
 
     // Reset button
