@@ -570,7 +570,35 @@
       }
     }
 
+    async function isCMYKJpeg(blob) {
+      if (!blob.type.includes('jpeg') && !blob.type.includes('jpg')) return false;
+      try {
+        // Read up to 64KB — enough to find the SOF marker past large APP/ICC headers
+        const buffer = await blob.slice(0, 65536).arrayBuffer();
+        const data = new Uint8Array(buffer);
+        let i = 2; // skip SOI (0xFF 0xD8)
+        while (i < data.length - 3) {
+          if (data[i] !== 0xFF) break;
+          const marker = data[i + 1];
+          // SOF markers (Start of Frame): C0-C3, C5-C7, C9-CB, CD-CF
+          if ((marker >= 0xC0 && marker <= 0xC3) ||
+              (marker >= 0xC5 && marker <= 0xC7) ||
+              (marker >= 0xC9 && marker <= 0xCB) ||
+              (marker >= 0xCD && marker <= 0xCF)) {
+            return data[i + 9] === 4; // 4 components = CMYK
+          }
+          if (marker === 0xD9 || marker === 0xDA) break; // EOI or SOS
+          const segLength = (data[i + 2] << 8) | data[i + 3];
+          if (segLength < 2) break;
+          i += 2 + segLength;
+        }
+      } catch (e) { /* ignore */ }
+      return false;
+    }
+
     async function compressImage(blob, maxWidth, maxHeight, quality, enableResize, convertToJpg) {
+      const cmyk = await isCMYKJpeg(blob);
+
       return new Promise((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(blob);
@@ -590,8 +618,8 @@
             needsResize = true;
           }
 
-          // If no resize needed and no format conversion, keep the original
-          if (!needsResize && !convertToJpg) {
+          // If no resize needed, no format conversion, and not CMYK, keep the original
+          if (!needsResize && !convertToJpg && !cmyk) {
             resolve(blob);
             return;
           }
@@ -602,15 +630,17 @@
           canvas.height = height;
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Determine output format
-          const outputType = convertToJpg ? 'image/jpeg' : (blob.type || 'image/jpeg');
+          // Determine output format — CMYK must be re-encoded as JPEG (RGB)
+          const outputType = (convertToJpg || cmyk) ? 'image/jpeg' : (blob.type || 'image/jpeg');
           const outputQuality = quality;
 
-          // Convert to specified format
           canvas.toBlob((compressedBlob) => {
             if (compressedBlob) {
-              // Keep the original if re-encoding made it larger
-              if (compressedBlob.size >= blob.size) {
+              // For CMYK, always use the converted blob (color space must change)
+              if (cmyk) {
+                resolve(compressedBlob);
+              } else if (compressedBlob.size >= blob.size) {
+                // Keep the original if re-encoding made it larger
                 resolve(blob);
               } else {
                 resolve(compressedBlob);
