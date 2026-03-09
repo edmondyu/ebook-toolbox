@@ -198,7 +198,8 @@
     if (!file) return;
 
     rawPdfBytes = new Uint8Array(await file.arrayBuffer());
-    loadedPdf = await pdfjsLib.getDocument({ data: rawPdfBytes }).promise;
+    // Pass a copy to pdf.js — it transfers the buffer internally, which would detach rawPdfBytes
+    loadedPdf = await pdfjsLib.getDocument({ data: rawPdfBytes.slice() }).promise;
 
     await renderPreview();
     splitBtn.disabled = false;
