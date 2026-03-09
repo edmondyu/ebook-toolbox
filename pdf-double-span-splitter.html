@@ -154,7 +154,8 @@
   const previewCanvas = document.getElementById("preview");
   const previewCtx = previewCanvas.getContext("2d");
 
-  let loadedPdf = null;
+  let loadedPdf = null;    // Raw bytes kept for pdf-lib (pdf.js may internally copy the buffer)
+  let rawPdfBytes = null;
 
   // Drag and drop helper functions
   function preventDefaults(e) {
@@ -196,8 +197,8 @@
   async function handleFileSelection(file) {
     if (!file) return;
 
-    const arrayBuffer = await file.arrayBuffer();
-    loadedPdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    rawPdfBytes = new Uint8Array(await file.arrayBuffer());
+    loadedPdf = await pdfjsLib.getDocument({ data: rawPdfBytes }).promise;
 
     await renderPreview();
     splitBtn.disabled = false;
@@ -245,61 +246,32 @@
   }
 
   splitBtn.addEventListener("click", async () => {
+    // Use pdf-lib to crop pages directly — preserves text, vectors and fonts
+    const srcPdf = await PDFDocument.load(rawPdfBytes);
     const outputPdf = await PDFDocument.create();
     const splitRatio = splitRatioInput.value / 100;
     const rtl = rtlOrderCheckbox.checked;
 
-    for (let i = 1; i <= loadedPdf.numPages; i++) {
-      const page = await loadedPdf.getPage(i);
-      const viewport = page.getViewport({ scale: 2 });
+    for (let i = 0; i < srcPdf.getPageCount(); i++) {
+      const srcPage = srcPdf.getPage(i);
+      const { width: pw, height: ph } = srcPage.getSize();
+      const splitX = pw * splitRatio;
 
-      const srcCanvas = document.createElement("canvas");
-      const srcCtx = srcCanvas.getContext("2d");
-      srcCanvas.width = viewport.width;
-      srcCanvas.height = viewport.height;
+      // Copy the source page twice — one for each half
+      const [leftCopy] = await outputPdf.copyPages(srcPdf, [i]);
+      const [rightCopy] = await outputPdf.copyPages(srcPdf, [i]);
 
-      // Pre-fill with white so transparent PDF areas don't become black in JPEG
-      srcCtx.fillStyle = "white";
-      srcCtx.fillRect(0, 0, srcCanvas.width, srcCanvas.height);
+      // Crop left half: x=0 to splitX
+      leftCopy.setMediaBox(0, 0, splitX, ph);
+      leftCopy.setCropBox(0, 0, splitX, ph);
 
-      await page.render({
-        canvasContext: srcCtx,
-        viewport
-      }).promise;
+      // Crop right half: x=splitX to pw
+      rightCopy.setMediaBox(splitX, 0, pw - splitX, ph);
+      rightCopy.setCropBox(splitX, 0, pw - splitX, ph);
 
-      const splitX = Math.floor(srcCanvas.width * splitRatio);
-
-      const halves = [
-        { x: 0, w: splitX },
-        { x: splitX, w: srcCanvas.width - splitX }
-      ];
-
-      if (rtl) halves.reverse();
-
-      for (const half of halves) {
-        const c = document.createElement("canvas");
-        c.width = half.w;
-        c.height = srcCanvas.height;
-
-        const ctx = c.getContext("2d");
-        ctx.drawImage(
-          srcCanvas,
-          half.x, 0, half.w, srcCanvas.height,
-          0, 0, half.w, srcCanvas.height
-        );
-
-        const imgBytes = await new Promise(res => c.toBlob(b => {
-          b.arrayBuffer().then(res);
-        }, "image/jpeg", 0.95));
-
-        const img = await outputPdf.embedJpg(imgBytes);
-        const pageOut = outputPdf.addPage([c.width, c.height]);
-        pageOut.drawImage(img, {
-          x: 0,
-          y: 0,
-          width: c.width,
-          height: c.height
-        });
+      const halves = rtl ? [rightCopy, leftCopy] : [leftCopy, rightCopy];
+      for (const halfPage of halves) {
+        outputPdf.addPage(halfPage);
       }
     }
 
