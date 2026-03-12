@@ -787,33 +787,113 @@
     });
     // ---------- Image extraction ----------
 
-    // Convert pdf.js imgData (various kinds) to a Uint8ClampedArray of RGBA
+    // Multiply two PDF CTM matrices [a,b,c,d,e,f]
+    function mulCTM([a1,b1,c1,d1,e1,f1], [a2,b2,c2,d2,e2,f2]) {
+      return [
+        a1*a2+c1*b2, b1*a2+d1*b2,
+        a1*c2+c1*d2, b1*c2+d1*d2,
+        a1*e2+c1*f2+e1, b1*e2+d1*f2+f1
+      ];
+    }
+
+    // Group images whose page-space bounding boxes share an edge (adjacent tiles)
+    function groupAdjacentImages(images, tol=2) {
+      const n = images.length;
+      const visited = new Array(n).fill(false);
+      const groups = [];
+      for (let i = 0; i < n; i++) {
+        if (visited[i]) continue;
+        const group = [images[i]];
+        visited[i] = true;
+        const queue = [i];
+        while (queue.length) {
+          const ci = queue.shift();
+          const cur = images[ci];
+          for (let j = 0; j < n; j++) {
+            if (visited[j]) continue;
+            const nxt = images[j];
+            const overlapH = Math.min(cur.y+cur.h, nxt.y+nxt.h) - Math.max(cur.y, nxt.y) > -tol;
+            const overlapV = Math.min(cur.x+cur.w, nxt.x+nxt.w) - Math.max(cur.x, nxt.x) > -tol;
+            const adj = (Math.abs((cur.x+cur.w)-nxt.x)<tol && overlapH) ||
+                        (Math.abs((nxt.x+nxt.w)-cur.x)<tol && overlapH) ||
+                        (Math.abs((cur.y+cur.h)-nxt.y)<tol && overlapV) ||
+                        (Math.abs((nxt.y+nxt.h)-cur.y)<tol && overlapV);
+            if (adj) { visited[j] = true; group.push(images[j]); queue.push(j); }
+          }
+        }
+        groups.push(group);
+      }
+      return groups;
+    }
+
+    // Stitch a group of adjacent tiles into one canvas.
+    // Tiles must form a perfect N×M grid; returns null if they don't.
+    function stitchTiles(tiles) {
+      const tol = 2;
+      const uniqueXs = [...new Set(tiles.map(t => Math.round(t.x)))].sort((a,b) => a-b);
+      // Sort Y descending: highest PDF-y = top of image = top of canvas
+      const uniqueYs = [...new Set(tiles.map(t => Math.round(t.y)))].sort((a,b) => b-a);
+
+      if (tiles.length !== uniqueXs.length * uniqueYs.length) return null;
+
+      // Accumulate pixel column offsets (left → right)
+      const xOff = {};
+      let cx = 0;
+      for (const ux of uniqueXs) {
+        xOff[ux] = cx;
+        const t = tiles.find(t => Math.abs(t.x-ux) < tol);
+        cx += t ? t.imgData.width : 0;
+      }
+      // Accumulate pixel row offsets (top → bottom in canvas)
+      const yOff = {};
+      let cy = 0;
+      for (const uy of uniqueYs) {
+        yOff[uy] = cy;
+        const t = tiles.find(t => Math.abs(t.y-uy) < tol);
+        cy += t ? t.imgData.height : 0;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = cx; canvas.height = cy;
+      if (!canvas.width || !canvas.height) return null;
+      const ctx = canvas.getContext("2d");
+
+      for (const tile of tiles) {
+        const tc = document.createElement("canvas");
+        tc.width = tile.imgData.width; tc.height = tile.imgData.height;
+        tc.getContext("2d").putImageData(
+          new ImageData(toRGBA(tile.imgData), tile.imgData.width, tile.imgData.height), 0, 0
+        );
+        const nearX = uniqueXs.find(ux => Math.abs(tile.x-ux) < tol);
+        const nearY = uniqueYs.find(uy => Math.abs(tile.y-uy) < tol);
+        if (nearX === undefined || nearY === undefined) return null;
+        ctx.drawImage(tc, xOff[nearX], yOff[nearY]);
+      }
+      return canvas;
+    }
+
+    // Convert pdf.js imgData (various pixel formats) to RGBA Uint8ClampedArray
     function toRGBA(imgData) {
       const { width, height, kind, data } = imgData;
       const pixels = width * height;
       const rgba = new Uint8ClampedArray(pixels * 4);
-
       if (kind === 1) {
         // GRAYSCALE_1BPP — packed bits, MSB first
         const bytesPerRow = (width + 7) >> 3;
-        for (let y = 0; y < height; y++) {
+        for (let y = 0; y < height; y++)
           for (let x = 0; x < width; x++) {
-            const byteIdx = y * bytesPerRow + (x >> 3);
-            const val = (data[byteIdx] >> (7 - (x & 7))) & 1 ? 255 : 0;
+            const val = (data[y * bytesPerRow + (x >> 3)] >> (7 - (x & 7))) & 1 ? 255 : 0;
             const i = (y * width + x) * 4;
             rgba[i] = val; rgba[i+1] = val; rgba[i+2] = val; rgba[i+3] = 255;
           }
-        }
       } else if (kind === 2) {
         // RGB_24BPP
         for (let k = 0; k < pixels; k++) {
-          rgba[k*4]   = data[k*3];
-          rgba[k*4+1] = data[k*3+1];
-          rgba[k*4+2] = data[k*3+2];
-          rgba[k*4+3] = 255;
+          rgba[k*4] = data[k*3]; rgba[k*4+1] = data[k*3+1];
+          rgba[k*4+2] = data[k*3+2]; rgba[k*4+3] = 255;
         }
       } else {
-        // RGBA_32BPP or unknown — use as-is
+        // RGBA_32BPP or unknown
         rgba.set(data instanceof Uint8ClampedArray ? data : new Uint8ClampedArray(data.buffer || data));
       }
       return rgba;
@@ -821,7 +901,6 @@
 
     extractImagesBtn.addEventListener("click", async () => {
       if (!selectedFile) return;
-
       extractImagesBtn.disabled = true;
       logEl.textContent = "";
 
@@ -839,58 +918,85 @@
           const page = await pdf.getPage(pageNum);
           const ops = await page.getOperatorList();
 
-          const seen = new Set();
-          let pageImgIdx = 0;
+          // Track CTM to know each image's position/size in page space
+          const ctmStack = [[1,0,0,1,0,0]];
+          const rawPlacements = [];
 
           for (let j = 0; j < ops.fnArray.length; j++) {
-            const fn = ops.fnArray[j];
-            let imgData = null;
-
-            if (fn === pdfjsLib.OPS.paintImageXObject || fn === pdfjsLib.OPS.paintJpegXObject) {
-              const imgName = ops.argsArray[j][0];
-              if (seen.has(imgName)) continue;
-              seen.add(imgName);
-              imgData = await new Promise(resolve => page.objs.get(imgName, resolve));
+            const fn = ops.fnArray[j], args = ops.argsArray[j];
+            if (fn === pdfjsLib.OPS.pushGraphicsState) {
+              ctmStack.push([...ctmStack[ctmStack.length-1]]);
+            } else if (fn === pdfjsLib.OPS.popGraphicsState) {
+              if (ctmStack.length > 1) ctmStack.pop();
+            } else if (fn === pdfjsLib.OPS.transform) {
+              ctmStack[ctmStack.length-1] = mulCTM(ctmStack[ctmStack.length-1], args);
+            } else if (fn === pdfjsLib.OPS.paintImageXObject || fn === pdfjsLib.OPS.paintJpegXObject) {
+              rawPlacements.push({ name: args[0], ctm: [...ctmStack[ctmStack.length-1]] });
             } else if (fn === pdfjsLib.OPS.paintInlineImageXObject) {
-              imgData = ops.argsArray[j][0];
+              rawPlacements.push({ inlineData: args[0], ctm: [...ctmStack[ctmStack.length-1]] });
             }
+          }
 
+          // Fetch pixel data (cache by name to avoid duplicate fetches)
+          const cache = {};
+          for (const p of rawPlacements) {
+            if (p.name && !cache[p.name])
+              cache[p.name] = await new Promise(resolve => page.objs.get(p.name, resolve));
+          }
+
+          // Build page-space bounding box for each image placement
+          const images = [];
+          for (const p of rawPlacements) {
+            const imgData = p.name ? cache[p.name] : p.inlineData;
             if (!imgData || !imgData.width || !imgData.height) continue;
-            // Skip tiny decorative elements
-            if (imgData.width < 50 || imgData.height < 50) continue;
+            const [a,,,d,e,f] = p.ctm;
+            const x = Math.min(e, e+a), y = Math.min(f, f+d);
+            const w = Math.abs(a), h = Math.abs(d);
+            if (w < 1 || h < 1) continue;
+            images.push({ imgData, x, y, w, h });
+          }
 
-            const rgba = toRGBA(imgData);
-            const c = document.createElement("canvas");
-            c.width = imgData.width;
-            c.height = imgData.height;
-            c.getContext("2d").putImageData(new ImageData(rgba, imgData.width, imgData.height), 0, 0);
+          // Group adjacent tiles and stitch them together
+          const groups = groupAdjacentImages(images);
+          let pageImgIdx = 0;
 
-            const blob = await new Promise(resolve => c.toBlob(resolve, "image/jpeg", 0.92));
-            const arrayBuffer = await blob.arrayBuffer();
+          for (const group of groups) {
+            let canvas = group.length > 1 ? stitchTiles(group) : null;
 
-            pageImgIdx++;
-            totalImages++;
-            const filename = `${baseName}_p${String(pageNum).padStart(3,"0")}_img${String(pageImgIdx).padStart(2,"0")}.jpg`;
-            zip.file(filename, arrayBuffer);
+            if (canvas) {
+              // Stitched multi-tile image
+              const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.92));
+              zip.file(`${baseName}_p${String(pageNum).padStart(3,"0")}_img${String(++pageImgIdx).padStart(2,"0")}.jpg`,
+                       await blob.arrayBuffer());
+              totalImages++;
+            } else {
+              // Single image or stitching failed — save tiles individually
+              for (const tile of group) {
+                if (tile.imgData.width < 50 || tile.imgData.height < 50) continue;
+                const c = document.createElement("canvas");
+                c.width = tile.imgData.width; c.height = tile.imgData.height;
+                c.getContext("2d").putImageData(
+                  new ImageData(toRGBA(tile.imgData), tile.imgData.width, tile.imgData.height), 0, 0
+                );
+                const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.92));
+                zip.file(`${baseName}_p${String(pageNum).padStart(3,"0")}_img${String(++pageImgIdx).padStart(2,"0")}.jpg`,
+                         await blob.arrayBuffer());
+                totalImages++;
+              }
+            }
           }
 
           if (pageImgIdx > 0) log(`Page ${pageNum}: extracted ${pageImgIdx} image(s)`);
         }
 
-        if (totalImages === 0) {
-          log("No embedded images found in this PDF.");
-          return;
-        }
+        if (totalImages === 0) { log("No embedded images found in this PDF."); return; }
 
         log(`Creating ZIP with ${totalImages} image(s)...`);
         const zipBlob = await zip.generateAsync({ type: "blob" });
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement("a");
-        a.href = url;
-        a.download = baseName + "_images.zip";
-        a.click();
+        a.href = url; a.download = baseName + "_images.zip"; a.click();
         URL.revokeObjectURL(url);
-
         log(`Done. ${totalImages} image(s) saved to ${baseName}_images.zip`);
       } catch (e) {
         log("Error: " + (e && e.message ? e.message : String(e)));
