@@ -208,8 +208,6 @@
   </div>
 
   <script>
-    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-
     let selectedFile = null;
     let outputBlob = null;
     let outputFilename = '';
@@ -326,74 +324,47 @@
     });
 
     // ── Core DOCX processing ──────────────────────────────────────────────────
+    function setParaStyle(paraXml, styleId) {
+      const newPStyle = `<w:pStyle w:val="${styleId}"/>`;
+      if (/<w:pStyle[^>]*\/>/.test(paraXml))
+        return paraXml.replace(/<w:pStyle[^>]*\/>/, newPStyle);
+      if (/<w:pPr[\s>]/.test(paraXml))
+        return paraXml.replace(/(<w:pPr[^>]*>)/, `$1${newPStyle}`);
+      return paraXml.replace(/(<w:p(?:\s[^>]*)?>)/, `$1<w:pPr>${newPStyle}</w:pPr>`);
+    }
+
     async function processDocx(file, regex, level) {
       const zip = await JSZip.loadAsync(await file.arrayBuffer());
 
       const docEntry = zip.file('word/document.xml');
       if (!docEntry) throw new Error('Not a valid DOCX file (missing word/document.xml).');
 
-      const docXml = await docEntry.async('string');
-
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(docXml, 'application/xml');
-
-      const parseErr = doc.querySelector('parsererror');
-      if (parseErr) throw new Error('Failed to parse document XML.');
-
+      let docXml = await docEntry.async('string');
       const styleId = 'Heading' + level;
       const results = [];
 
-      const paragraphs = Array.from(doc.getElementsByTagNameNS(W_NS, 'p'));
+      docXml = docXml.replace(/<w:p[\s>][\s\S]*?<\/w:p>/g, paraXml => {
+        // Extract all <w:t> text content
+        const textParts = [];
+        const tRegex = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+        let m;
+        while ((m = tRegex.exec(paraXml)) !== null) textParts.push(m[1]);
+        const text = textParts.join('');
+        if (!text.trim()) return paraXml;
 
-      for (const para of paragraphs) {
-        // Concatenate all <w:t> text in this paragraph
-        const text = Array.from(para.getElementsByTagNameNS(W_NS, 't'))
-          .map(t => t.textContent).join('');
-        if (!text.trim()) continue;
-
-        // Reset stateful regex
         regex.lastIndex = 0;
-        if (!regex.test(text)) continue;
+        if (!regex.test(text)) return paraXml;
 
-        // Read existing pPr / pStyle
-        let pPr = para.getElementsByTagNameNS(W_NS, 'pPr')[0] || null;
-        let pStyle = pPr ? pPr.getElementsByTagNameNS(W_NS, 'pStyle')[0] || null : null;
-
-        // Capture old style name for display
-        const oldStyle = pStyle
-          ? (pStyle.getAttributeNS(W_NS, 'val') || pStyle.getAttribute('w:val') || '(default)')
-          : '(default)';
-
-        // Create pPr if missing
-        if (!pPr) {
-          pPr = doc.createElementNS(W_NS, 'w:pPr');
-          para.insertBefore(pPr, para.firstChild);
-        }
-
-        // Create pStyle if missing; insert as first child of pPr (required by OOXML schema)
-        if (!pStyle) {
-          pStyle = doc.createElementNS(W_NS, 'w:pStyle');
-          pPr.insertBefore(pStyle, pPr.firstChild);
-        }
-
-        // Set heading style value
-        pStyle.setAttributeNS(W_NS, 'w:val', styleId);
-
+        const oldStyleMatch = paraXml.match(/<w:pStyle[^>]+w:val="([^"]+)"/);
+        const oldStyle = oldStyleMatch ? oldStyleMatch[1] : '(default)';
         results.push({ text: text.trim(), oldStyle });
-      }
+
+        return setParaStyle(paraXml, styleId);
+      });
 
       if (results.length === 0) return { results, blob: null };
 
-      // Serialize modified document XML back to string
-      const serializer = new XMLSerializer();
-      let newXml = serializer.serializeToString(doc);
-
-      // Ensure XML declaration is present (some serializers omit it)
-      if (!newXml.startsWith('<?xml')) {
-        newXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXml;
-      }
-
-      zip.file('word/document.xml', newXml, { compression: 'DEFLATE' });
+      zip.file('word/document.xml', docXml, { compression: 'DEFLATE' });
 
       const blob = await zip.generateAsync({
         type: 'blob',
