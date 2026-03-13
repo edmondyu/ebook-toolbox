@@ -176,10 +176,6 @@
         <input type="checkbox" id="flagI" />
         Case insensitive (<code>i</code>)
       </label>
-      <label class="inline-label">
-        <input type="checkbox" id="flagM" />
-        Multiline — <code>^</code>/<code>$</code> match line starts/ends (<code>m</code>)
-      </label>
     </div>
 
     <div class="field-group">
@@ -256,8 +252,7 @@
       // Validate regex
       let regex;
       try {
-        const flags = (document.getElementById('flagI').checked ? 'i' : '') +
-                      (document.getElementById('flagM').checked ? 'm' : '');
+        const flags = document.getElementById('flagI').checked ? 'i' : '';
         regex = new RegExp(patternStr, flags);
       } catch (e) {
         showError('Invalid regular expression: ' + e.message);
