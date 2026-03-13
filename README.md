@@ -1,5 +1,7 @@
 # ebook Publishing Toolbox
 
+**Version: v1.0.0**
+
 Professional tools for **ebook creation, conversion, and publishing** — all processing happens **entirely in your browser**. No server uploads, no data transmission, completely privacy-friendly and secure.
 
 This collection focuses on ebook publishing workflows while including essential tools for images, PDFs, text processing, and royalty reporting.
@@ -99,13 +101,15 @@ Consolidate royalty reports from multiple platforms into unified summaries.
 - ✅ **ZIP download** — packages all summary reports together
 - ✅ **Drag-and-drop UI** — easy report uploads
 
-### 9. Extract Text from PDF
-Extract text content from text-based PDFs (no OCR).
+### 9. Extract Content from PDF
+Extract text and embedded images from text-based PDFs (no OCR).
 
 **Features:**
-- ✅ **Simple text extraction** — outputs plain `.txt` file
+- ✅ **Text extraction** — outputs plain `.txt` file with page-by-page content
+- ✅ **Image extraction** — detects and exports all embedded images as a ZIP
+- ✅ **Tiled image stitching** — automatically merges split image tiles into single images
+- ✅ **Handles rotated images** — correctly detects images placed with rotation transforms
 - ✅ **Browser-based** — no server processing required
-- ✅ **Fast processing** — quick extraction for text-based PDFs
 - ✅ **Drag-and-drop UI** — easy PDF uploads
 
 ### 10. Split Double-Span PDF
@@ -117,7 +121,28 @@ Split 2-page spreads (book scans) into individual single pages.
 - ✅ **Perfect for book scans** — ideal for digitized books with facing pages
 - ✅ **Drag-and-drop UI** — easy PDF uploads
 
-### 11. Extract Ebook Metadata
+### 11. Book Cover Grid
+Combine multiple book cover images into a single grid image for catalogs, social media, or promotional materials.
+
+**Features:**
+- ✅ **Flexible grid layout** — configurable number of columns and row height
+- ✅ **Uniform alignment** — all covers scaled to the same height
+- ✅ **Configurable spacing** — adjustable gap between covers
+- ✅ **PNG output** — high-quality lossless grid image download
+- ✅ **Drag-and-drop UI** — easy image uploads with live preview
+
+### 12. Batch Update DOCX Headings
+Apply heading styles to paragraphs in a Word document whose text matches a regular expression.
+
+**Features:**
+- ✅ **Up to 3 rules** — each with its own regex pattern and heading level (H1–H6)
+- ✅ **Any locale** — resolves the correct heading styleId from the document's own styles.xml (works with English, Chinese, and all other Word locales)
+- ✅ **Duplicate prevention** — UI disables already-used heading levels across rules
+- ✅ **Single-pass processing** — all rules applied in one pass; first matching rule wins per paragraph
+- ✅ **Results preview** — lists every matched paragraph, its old style, and the new heading applied
+- ✅ **Drag-and-drop UI** — easy DOCX upload and download
+
+### 13. Extract Ebook Metadata
 Extract metadata from EPUB and PDF files and export to CSV format.
 
 **Features:**
@@ -344,21 +369,23 @@ Because these are static HTML files, you can deploy them almost anywhere:
 
 ### Project Structure
 
-```
+```text
 .
-├── index.html                    # Landing page with tool cards
-├── gdocs-to-epub.html           # Docs to EPUB converter (Google Docs & InDesign)
-├── epub-image-compress.html     # EPUB Image Compression tool
-├── image-compression.html        # Image resizer/compressor tool
-├── html-extractor.html          # HTML text extractor
-├── text-splitter.html           # Text file chapter splitter
-├── xhtml-converter.html         # Text to XHTML converter
-├── pdf-to-jpg.html              # PDF to JPG converter
-├── royalty-reporting.html       # Royalty report consolidator
-├── pdf-extractor.html           # PDF text extractor
-├── pdf-double-span-splitter.html # PDF page splitter
-├── ebook-metadata.html          # Ebook metadata extractor
-└── README.md                    # This file
+├── index.html                     # Landing page with tool cards
+├── gdocs-to-epub.html             # Docs to EPUB converter (Google Docs & InDesign)
+├── epub-image-compress.html       # EPUB Image Compression tool
+├── image-compression.html         # Image resizer/compressor tool
+├── html-extractor.html            # HTML text extractor
+├── text-splitter.html             # Text file chapter splitter
+├── xhtml-converter.html           # Text to XHTML converter
+├── pdf-to-jpg.html                # PDF to JPG converter
+├── royalty-reporting.html         # Royalty report consolidator
+├── pdf-extractor.html             # Extract text and images from PDF
+├── pdf-double-span-splitter.html  # PDF double-page spread splitter
+├── book-cover-grid.html           # Book cover grid generator
+├── docx-heading-updater.html      # Batch DOCX heading updater
+├── ebook-metadata.html            # Ebook metadata extractor
+└── README.md                      # This file
 ```
 
 ### Customizing Tools
