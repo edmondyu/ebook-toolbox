@@ -638,8 +638,8 @@
 
     // Download sample CSV button
     document.getElementById('downloadSampleCSV').addEventListener('click', () => {
-      const sampleCSV = `book_title,book_subtitle,author_name,publisher,publish_date,language,book_description,author_description,isbn,tags
-"Sample Book Title","An Amazing Subtitle","John Doe","Sample Publisher","2024-01-15","en","This is a sample book description that explains what the book is about.","John Doe is an award-winning author with over 20 years of experience.","978-1234567890","Fiction,Mystery,Thriller"`;
+      const sampleCSV = `book_title,book_subtitle,book_description,author_name,author_description,publisher,isbn,publish_date,list_price,tags,cover_image_filename,pdf_filename,epub_filename,edition_name,edition_description,auto_deliver,auto_memo,enable_drm,language
+"小王子","獻給所有曾是孩子的大人","「所有的大人，起初都是孩子，雖然很少有人記得這件事。」\n這是一個關於愛、失去和意義的永恆故事。小王子離開他的星球，造訪了各種奇特的大人，最終來到地球，遇見了一朵玫瑰和一隻狐狸，學會了什麼是真正的感情。","安東尼·德·聖修伯里","法國作家、詩人及飛行員。1900年生於法國里昂，1944年在執行飛行任務時失蹤。《小王子》是他最著名的作品，自1943年出版至今，已被譯成三百多種語言，是有史以來最暢銷的書籍之一。","蜂鳥出版","9789887062900",2024-01-01,9.99,"文學,童話,經典",,,,"電子版",,TRUE,,FALSE,zh`;
 
       const blob = new Blob([sampleCSV], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
