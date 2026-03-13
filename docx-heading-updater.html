@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Batch Update DOCX Headings – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #131313;
+      color: #f9f9f9;
+    }
+    h1, h2, h3 { margin-top: 0; margin-bottom: 0.25rem; color: #50e3c2; }
+    .subtitle { margin-top: 0; margin-bottom: 1.5rem; color: #9ca3af; font-size: 0.95rem; }
+    .card {
+      background: #1f1f1f;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+    }
+    button.primary { background: #50e3c2; color: #131313; }
+    button.primary:hover:not(:disabled) { background: #3dd4b3; }
+    button.secondary { background: #3a3a3a; color: #f9f9f9; }
+    button.secondary:hover:not(:disabled) { background: #4a4a4a; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    label.field-label {
+      color: #50e3c2;
+      font-size: 0.9rem;
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    input[type="text"], select {
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+      background: #2a2a2a;
+      color: #f9f9f9;
+      font-size: 0.9rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    input[type="text"] { width: 100%; box-sizing: border-box; }
+    input[type="text"]:focus, select:focus { outline: 2px solid #50e3c2; border-color: transparent; }
+    select { font-family: inherit; }
+    .hint { font-size: 0.85rem; color: #9ca3af; margin-top: 0.3rem; }
+    .field-group { margin-bottom: 1rem; }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .inline-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: #f9f9f9;
+      font-size: 0.9rem;
+    }
+    a.back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: #50e3c2;
+    }
+    a.back:hover { color: #3dd4b3; }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-bottom: 1rem;
+    }
+    .drop-zone.drag-over { border-color: #50e3c2; background: #1a3a35; }
+    .drop-zone p { margin: 0.5rem 0; color: #9ca3af; }
+    .drop-zone .drop-icon { font-size: 2rem; margin-bottom: 0.5rem; color: #50e3c2; }
+    .drop-zone input[type="file"] { display: none; }
+    .drop-zone .file-input-wrapper { margin-top: 1rem; }
+    .drop-zone .browse-btn {
+      background: #3a3a3a; color: #f9f9f9; padding: 0.5rem 1rem;
+      border-radius: 6px; cursor: pointer; display: inline-block; font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover { background: #4a4a4a; }
+    .drop-zone.has-file { border-color: #10b981; background: #064e3b; }
+    .drop-zone.has-file .drop-icon { color: #10b981; }
+    .error-msg {
+      color: #f87171;
+      background: #2d1515;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      margin-top: 0.75rem;
+    }
+    .summary-msg { font-size: 0.95rem; margin-bottom: 1rem; color: #f9f9f9; }
+    .summary-msg strong { color: #50e3c2; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    thead th {
+      background: #2a2a2a;
+      color: #50e3c2;
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #3a3a3a;
+    }
+    tbody td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #222; vertical-align: top; }
+    tbody tr:hover td { background: #252525; }
+    .col-num { color: #9ca3af; width: 2.5rem; }
+    .col-text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-word; }
+    .col-old { color: #9ca3af; }
+    .col-new { color: #50e3c2; font-weight: 600; }
+    code {
+      background: #2a2a2a;
+      color: #50e3c2;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+  <a class="back" href="index.html">← Back to Toolbox</a>
+
+  <h1>Batch Update DOCX Headings</h1>
+  <p class="subtitle">
+    Apply a heading style (H1–H6) to every paragraph in a Word document whose text matches a regular expression.
+    You can run multiple passes on the downloaded file to apply different heading levels.
+  </p>
+
+  <!-- Step 1 -->
+  <div class="card">
+    <h2>1. Select DOCX</h2>
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-icon">📄</div>
+      <p><strong>Drag and drop .docx file here</strong></p>
+      <p>or</p>
+      <div class="file-input-wrapper">
+        <label for="fileInput" class="browse-btn">Browse Files</label>
+        <input type="file" id="fileInput" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="card">
+    <h2>2. Configure Rule</h2>
+
+    <div class="field-group">
+      <label class="field-label" for="regexInput">Regex pattern</label>
+      <input type="text" id="regexInput" placeholder="e.g.  ^Chapter\s+\d+  or  第.+章" />
+      <div class="hint">
+        JavaScript regex. Tested against the full concatenated text of each paragraph.
+        Example: <code>^第.+章</code> matches paragraphs starting with "第…章".
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <label class="inline-label">
+        <input type="checkbox" id="flagI" />
+        Case insensitive (<code>i</code>)
+      </label>
+      <label class="inline-label">
+        <input type="checkbox" id="flagM" />
+        Multiline — <code>^</code>/<code>$</code> match line starts/ends (<code>m</code>)
+      </label>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label" for="headingLevel">Apply heading level</label>
+      <select id="headingLevel">
+        <option value="1">Heading 1 (H1)</option>
+        <option value="2">Heading 2 (H2)</option>
+        <option value="3">Heading 3 (H3)</option>
+        <option value="4">Heading 4 (H4)</option>
+        <option value="5">Heading 5 (H5)</option>
+        <option value="6">Heading 6 (H6)</option>
+      </select>
+    </div>
+
+    <div id="errorMsg" class="error-msg" style="display:none;"></div>
+
+    <div style="margin-top:1rem;">
+      <button id="applyBtn" class="primary" disabled>Apply Headings</button>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="card" id="resultsCard" style="display:none;">
+    <h2>3. Results</h2>
+    <div id="resultsSummary" class="summary-msg"></div>
+    <div id="resultsTable" style="overflow-x:auto; max-height:420px; overflow-y:auto;"></div>
+    <div style="margin-top:1rem;">
+      <button id="downloadBtn" class="primary">Download Modified DOCX</button>
+    </div>
+  </div>
+
+  <script>
+    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+    let selectedFile = null;
+    let outputBlob = null;
+    let outputFilename = '';
+
+    // ── Drag & drop ──────────────────────────────────────────────────────────
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const applyBtn = document.getElementById('applyBtn');
+
+    function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+    ['dragenter','dragover','dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, preventDefaults));
+    dropZone.addEventListener('dragenter', () => dropZone.classList.add('drag-over'));
+    dropZone.addEventListener('dragover',  () => dropZone.classList.add('drag-over'));
+    dropZone.addEventListener('dragleave', e => { if (e.target === dropZone) dropZone.classList.remove('drag-over'); });
+    dropZone.addEventListener('drop', e => {
+      dropZone.classList.remove('drag-over');
+      const f = e.dataTransfer.files[0];
+      if (f) setFile(f);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+
+    function setFile(f) {
+      selectedFile = f;
+      dropZone.classList.add('has-file');
+      dropZone.querySelector('p:first-of-type').innerHTML = '<strong>' + f.name + '</strong>';
+      applyBtn.disabled = false;
+      document.getElementById('resultsCard').style.display = 'none';
+      outputBlob = null;
+    }
+
+    // ── Apply ─────────────────────────────────────────────────────────────────
+    applyBtn.addEventListener('click', async () => {
+      const patternStr = document.getElementById('regexInput').value.trim();
+      const errorEl = document.getElementById('errorMsg');
+      errorEl.style.display = 'none';
+
+      if (!patternStr) { showError('Please enter a regex pattern.'); return; }
+      if (!selectedFile) { showError('Please select a DOCX file.'); return; }
+
+      // Validate regex
+      let regex;
+      try {
+        const flags = (document.getElementById('flagI').checked ? 'i' : '') +
+                      (document.getElementById('flagM').checked ? 'm' : '');
+        regex = new RegExp(patternStr, flags);
+      } catch (e) {
+        showError('Invalid regular expression: ' + e.message);
+        return;
+      }
+
+      applyBtn.disabled = true;
+      applyBtn.textContent = 'Processing…';
+
+      try {
+        const level = parseInt(document.getElementById('headingLevel').value, 10);
+        const { results, blob } = await processDocx(selectedFile, regex, level);
+
+        if (results.length === 0) {
+          showError('No paragraphs matched the pattern. No changes made.');
+          return;
+        }
+
+        outputBlob = blob;
+        outputFilename = selectedFile.name.replace(/\.docx$/i, '') + '_headings.docx';
+        showResults(results, level);
+      } catch (e) {
+        showError('Error: ' + (e.message || String(e)));
+      } finally {
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply Headings';
+      }
+    });
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function showResults(results, level) {
+      const card = document.getElementById('resultsCard');
+      document.getElementById('resultsSummary').innerHTML =
+        '<strong>' + results.length + '</strong> paragraph' + (results.length === 1 ? '' : 's') +
+        ' updated → <strong>Heading ' + level + '</strong>';
+
+      const rows = results.map((r, i) =>
+        '<tr>' +
+        '<td class="col-num">' + (i + 1) + '</td>' +
+        '<td class="col-text">' + escHtml(r.text.length > 120 ? r.text.slice(0, 120) + '…' : r.text) + '</td>' +
+        '<td class="col-old">' + escHtml(r.oldStyle) + '</td>' +
+        '<td class="col-new">Heading ' + level + '</td>' +
+        '</tr>'
+      ).join('');
+
+      document.getElementById('resultsTable').innerHTML =
+        '<table><thead><tr>' +
+        '<th>#</th><th>Paragraph text</th><th>Previous style</th><th>New style</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>';
+
+      card.style.display = 'block';
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Download ──────────────────────────────────────────────────────────────
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      if (!outputBlob) return;
+      const url = URL.createObjectURL(outputBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = outputFilename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    });
+
+    // ── Core DOCX processing ──────────────────────────────────────────────────
+    async function processDocx(file, regex, level) {
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+
+      const docEntry = zip.file('word/document.xml');
+      if (!docEntry) throw new Error('Not a valid DOCX file (missing word/document.xml).');
+
+      const docXml = await docEntry.async('string');
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(docXml, 'application/xml');
+
+      const parseErr = doc.querySelector('parsererror');
+      if (parseErr) throw new Error('Failed to parse document XML.');
+
+      const styleId = 'Heading' + level;
+      const results = [];
+
+      const paragraphs = Array.from(doc.getElementsByTagNameNS(W_NS, 'p'));
+
+      for (const para of paragraphs) {
+        // Concatenate all <w:t> text in this paragraph
+        const text = Array.from(para.getElementsByTagNameNS(W_NS, 't'))
+          .map(t => t.textContent).join('');
+        if (!text.trim()) continue;
+
+        // Reset stateful regex
+        regex.lastIndex = 0;
+        if (!regex.test(text)) continue;
+
+        // Read existing pPr / pStyle
+        let pPr = para.getElementsByTagNameNS(W_NS, 'pPr')[0] || null;
+        let pStyle = pPr ? pPr.getElementsByTagNameNS(W_NS, 'pStyle')[0] || null : null;
+
+        // Capture old style name for display
+        const oldStyle = pStyle
+          ? (pStyle.getAttributeNS(W_NS, 'val') || pStyle.getAttribute('w:val') || '(default)')
+          : '(default)';
+
+        // Create pPr if missing
+        if (!pPr) {
+          pPr = doc.createElementNS(W_NS, 'w:pPr');
+          para.insertBefore(pPr, para.firstChild);
+        }
+
+        // Create pStyle if missing; insert as first child of pPr (required by OOXML schema)
+        if (!pStyle) {
+          pStyle = doc.createElementNS(W_NS, 'w:pStyle');
+          pPr.insertBefore(pStyle, pPr.firstChild);
+        }
+
+        // Set heading style value
+        pStyle.setAttributeNS(W_NS, 'w:val', styleId);
+
+        results.push({ text: text.trim(), oldStyle });
+      }
+
+      if (results.length === 0) return { results, blob: null };
+
+      // Serialize modified document XML back to string
+      const serializer = new XMLSerializer();
+      let newXml = serializer.serializeToString(doc);
+
+      // Ensure XML declaration is present (some serializers omit it)
+      if (!newXml.startsWith('<?xml')) {
+        newXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newXml;
+      }
+
+      zip.file('word/document.xml', newXml, { compression: 'DEFLATE' });
+
+      const blob = await zip.generateAsync({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        compression: 'DEFLATE'
+      });
+
+      return { results, blob };
+    }
+  </script>
+</body>
+</html>
