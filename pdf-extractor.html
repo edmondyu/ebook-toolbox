@@ -217,6 +217,18 @@
       <span class="hint">Uses <code>/.netlify/functions/zhconvert</code>.</span>
     </div>
 
+    <div class="controls-row" style="margin-top:0.75rem; border-top:1px solid #2a2a2a; padding-top:0.75rem;">
+      <span style="font-weight:600; min-width:140px;">Image format</span>
+      <label class="option-label" title="Re-encode all images as JPEG at quality 92. Smaller file size.">
+        <input type="radio" name="img-format" id="opt-img-jpeg" value="jpeg" checked />
+        Compressed JPEG
+      </label>
+      <label class="option-label" title="Save at original pixel resolution with no quality loss. Larger file size.">
+        <input type="radio" name="img-format" id="opt-img-png" value="png" />
+        Lossless PNG (original resolution)
+      </label>
+    </div>
+
     <div class="hint" style="margin-top:0.75rem;">
       Tip: If Chinese comes out blank/garbled, try <strong>Approach B</strong>, then <strong>Approach C</strong>.
     </div>
@@ -1023,13 +1035,17 @@
           const groups = groupAdjacentImages(images);
           let pageImgIdx = 0;
 
+          const usePng = document.querySelector('input[name="img-format"]:checked').value === "png";
+          const imgMime = usePng ? "image/png" : "image/jpeg";
+          const imgExt  = usePng ? "png" : "jpg";
+
           for (const group of groups) {
             let canvas = group.length > 1 ? stitchTiles(group) : null;
 
             if (canvas) {
               // Stitched multi-tile image
-              const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", 0.92));
-              zip.file(`${baseName}_p${String(pageNum).padStart(3,"0")}_img${String(++pageImgIdx).padStart(2,"0")}.jpg`,
+              const blob = await new Promise(r => canvas.toBlob(r, imgMime, usePng ? undefined : 0.92));
+              zip.file(`${baseName}_p${String(pageNum).padStart(3,"0")}_img${String(++pageImgIdx).padStart(2,"0")}.${imgExt}`,
                        await blob.arrayBuffer());
               totalImages++;
             } else {
@@ -1037,8 +1053,8 @@
               for (const tile of group) {
                 if (tile.imgData.width < 50 || tile.imgData.height < 50) continue;
                 const c = tileToCanvas(tile);
-                const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.92));
-                zip.file(`${baseName}_p${String(pageNum).padStart(3,"0")}_img${String(++pageImgIdx).padStart(2,"0")}.jpg`,
+                const blob = await new Promise(r => c.toBlob(r, imgMime, usePng ? undefined : 0.92));
+                zip.file(`${baseName}_p${String(pageNum).padStart(3,"0")}_img${String(++pageImgIdx).padStart(2,"0")}.${imgExt}`,
                          await blob.arrayBuffer());
                 totalImages++;
               }
