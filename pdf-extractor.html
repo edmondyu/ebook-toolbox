@@ -229,6 +229,11 @@
       </label>
     </div>
 
+    <div class="controls-row" style="margin-top:0.75rem; border-top:1px solid #2a2a2a; padding-top:0.75rem; align-items:center; gap:0.75rem;">
+      <span style="font-weight:600; min-width:140px;">Pages</span>
+      <input type="text" id="opt-pages" placeholder="e.g. 1, 3, 5-10  (leave blank for all)" style="flex:1; max-width:360px; padding:0.45rem 0.75rem; border-radius:6px; border:1px solid #3a3a3a; background:#2a2a2a; color:#f9f9f9; font-size:0.9rem; font-family:ui-monospace,monospace;" />
+    </div>
+
     <div class="hint" style="margin-top:0.75rem;">
       Tip: If Chinese comes out blank/garbled, try <strong>Approach B</strong>, then <strong>Approach C</strong>.
     </div>
@@ -520,6 +525,30 @@
       return compact;
     }
 
+    // ---------- Page filter helper ----------
+
+    // Parses the pages input field and returns a Set of valid 1-based page numbers.
+    // Returns null when the field is blank (meaning: all pages).
+    // Invalid tokens and out-of-range numbers are silently ignored.
+    function parsePageFilter(totalPages) {
+      const raw = document.getElementById('opt-pages').value.trim();
+      if (!raw) return null;
+      const pages = new Set();
+      for (const token of raw.split(',')) {
+        const part = token.trim();
+        const range = part.match(/^(\d+)\s*-\s*(\d+)$/);
+        if (range) {
+          const lo = parseInt(range[1], 10), hi = parseInt(range[2], 10);
+          for (let p = lo; p <= hi; p++) { if (p >= 1 && p <= totalPages) pages.add(p); }
+        } else if (/^\d+$/.test(part)) {
+          const p = parseInt(part, 10);
+          if (p >= 1 && p <= totalPages) pages.add(p);
+        }
+        // anything else is silently ignored
+      }
+      return pages.size > 0 ? pages : null;
+    }
+
     // ---------- PDF extraction (Approach A: X-gap spacing) ----------
 
     // Group items into rows by Y coordinate, then build each row line by X.
@@ -712,8 +741,10 @@
 
         const allLines = [];
         let totalItems = 0;
+        const pageFilter = parsePageFilter(pdf.numPages);
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          if (pageFilter && !pageFilter.has(pageNum)) continue;
           log(`Extracting page ${pageNum}/${pdf.numPages}...`);
           const page = await pdf.getPage(pageNum);
           const textContent = await page.getTextContent({ normalizeWhitespace: false });
@@ -977,8 +1008,10 @@
         const zip = new JSZip();
         const baseName = selectedFile.name.replace(/\.[^.]+$/, "");
         let totalImages = 0;
+        const imgPageFilter = parsePageFilter(pdf.numPages);
 
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          if (imgPageFilter && !imgPageFilter.has(pageNum)) continue;
           const page = await pdf.getPage(pageNum);
           const ops = await page.getOperatorList();
 
