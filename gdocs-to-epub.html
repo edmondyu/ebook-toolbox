@@ -1094,7 +1094,8 @@
             filename: newFilename,
             data: arrayBuffer,
             mediaType: 'image/jpeg',
-            originalSrc: imgRef.src
+            originalSrc: imgRef.src,
+            alt: imgRef.alt || ''
           });
         }
       }
@@ -1300,7 +1301,7 @@
       for (let i = 0; i < chapters.length; i++) {
         const chapter = chapters[i];
         const filename = `chapter_${String(i + 1).padStart(3, '0')}.xhtml`;
-        const xhtml = generateChapterXHTML(chapter, metadata.language, images);
+        const xhtml = generateChapterXHTML(chapter, metadata, images);
         zip.file(`OEBPS/Text/${filename}`, xhtml);
         chapterFiles.push({ filename, title: chapter.title, index: i });
       }
@@ -1344,12 +1345,14 @@
     }
 
     // Generate chapter XHTML
-    function generateChapterXHTML(chapter, language, images) {
+    function generateChapterXHTML(chapter, metadata, images) {
+      const language = metadata.language;
+      const defaultAlt = (metadata.title || '').trim() || '';
       let bodyContent = '';
       let footnotes = [];
 
       chapter.content.forEach(el => {
-        const result = cleanElementHTML(el, images);
+        const result = cleanElementHTML(el, images, defaultAlt);
         if (result) {
           if (result.isFootnote) {
             // Collect footnote for end of chapter
@@ -1438,7 +1441,7 @@ ${bodyContent}
     }
 
     // Clean HTML element for EPUB
-    function cleanElementHTML(el, images) {
+    function cleanElementHTML(el, images, defaultAlt) {
       const tagName = el.tagName;
 
       if (tagName === 'H1') {
@@ -1467,7 +1470,9 @@ ${bodyContent}
           const src = img.getAttribute('src');
           const imgObj = images.find(i => i.originalSrc === src);
           if (imgObj) {
-            return { html: `<p><img class="fit" alt="" src="../Images/${imgObj.filename}"/></p>`, isFootnote: false };
+            const alt = imgObj.alt || defaultAlt || '';
+            const caption = imgObj.alt ? `\n<div class="caption">${escapeXML(imgObj.alt)}\n</div>` : '';
+            return { html: `<p><img class="fit" src="../Images/${imgObj.filename}" alt="${escapeXML(alt)}"/>${caption}</p>`, isFootnote: false };
           }
         }
 
@@ -1500,7 +1505,9 @@ ${bodyContent}
         const src = el.getAttribute('src');
         const imgObj = images.find(i => i.originalSrc === src);
         if (imgObj) {
-          return { html: `<p><img class="fit" alt="" src="../Images/${imgObj.filename}"/></p>`, isFootnote: false };
+          const alt = imgObj.alt || defaultAlt || '';
+          const caption = imgObj.alt ? `\n<div class="caption">${escapeXML(imgObj.alt)}\n</div>` : '';
+          return { html: `<p><img class="fit" src="../Images/${imgObj.filename}" alt="${escapeXML(alt)}"/>${caption}</p>`, isFootnote: false };
         }
         return null;
       }
