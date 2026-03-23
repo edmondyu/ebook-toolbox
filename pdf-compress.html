@@ -373,6 +373,45 @@
       return null;
     }
 
+    // PNG Paeth predictor
+    function paethPredictor(a, b, c) {
+      const p = a + b - c;
+      const pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+      if (pa <= pb && pa <= pc) return a;
+      if (pb <= pc) return b;
+      return c;
+    }
+
+    // Undo PNG row filters (PDF FlateDecode + Predictor 10-15) to recover raw pixels.
+    // Returns a flat Uint8Array of width*height*channels bytes.
+    function pngUnfilter(filtered, width, channels, bpc) {
+      const bpp = Math.ceil(channels * bpc / 8); // bytes per pixel
+      const rowBytes = Math.ceil(width * channels * bpc / 8);
+      const numRows = Math.floor(filtered.length / (rowBytes + 1));
+      const out = new Uint8Array(numRows * rowBytes);
+      for (let y = 0; y < numRows; y++) {
+        const base = y * (rowBytes + 1);
+        const filterType = filtered[base];
+        const src = filtered.subarray(base + 1, base + 1 + rowBytes);
+        const dst = out.subarray(y * rowBytes, (y + 1) * rowBytes);
+        const prev = y > 0 ? out.subarray((y - 1) * rowBytes, y * rowBytes) : null;
+        for (let x = 0; x < rowBytes; x++) {
+          const a = x >= bpp ? dst[x - bpp] : 0;
+          const b = prev ? prev[x] : 0;
+          const c = (prev && x >= bpp) ? prev[x - bpp] : 0;
+          switch (filterType) {
+            case 0: dst[x] = src[x]; break;
+            case 1: dst[x] = (src[x] + a) & 0xFF; break;
+            case 2: dst[x] = (src[x] + b) & 0xFF; break;
+            case 3: dst[x] = (src[x] + Math.floor((a + b) / 2)) & 0xFF; break;
+            case 4: dst[x] = (src[x] + paethPredictor(a, b, c)) & 0xFF; break;
+            default: dst[x] = src[x];
+          }
+        }
+      }
+      return out;
+    }
+
     // Decode a Blob to an HTMLImageElement
     function blobToImage(blob) {
       return new Promise((resolve, reject) => {
@@ -472,13 +511,8 @@
             sourceBlob = new Blob([xObj.contents], { type: 'image/jpeg' });
 
           } else if (filterName === '/FlateDecode') {
-            // Zlib-compressed raw pixels. Skip if PNG predictor is in use (complex row filters).
             const dp = dict.lookup(PDFName.of('DecodeParms'));
             const predictor = dp ? getNum(dp, 'Predictor') : null;
-            if (predictor !== null && predictor >= 10) { skipped++; continue; }
-
-            const raw = await inflate(xObj.contents);
-            if (!raw) { skipped++; continue; }
 
             const cs = dict.lookup(PDFName.of('ColorSpace'));
             const csName = cs?.encodedName || '';
@@ -488,6 +522,14 @@
             let channels = 3;
             if (csName === '/DeviceGray') channels = 1;
             else if (csName === '/DeviceCMYK') { skipped++; continue; } // CMYK needs ICC conversion
+
+            let raw = await inflate(xObj.contents);
+            if (!raw) { skipped++; continue; }
+
+            // Undo PNG row filters if present (Predictor 10–15)
+            if (predictor !== null && predictor >= 10) {
+              raw = pngUnfilter(raw, origW, channels, bpc);
+            }
 
             const expectedLen = origW * origH * channels;
             if (raw.length < expectedLen) { skipped++; continue; }
@@ -568,7 +610,7 @@
       }
 
       onProgress('saving…', 95);
-      const bytes = await pdfDoc.save({ useObjectStreams: false });
+      const bytes = await pdfDoc.save({ useObjectStreams: true });
       return { bytes, compressed, skipped, thumbsRemoved };
     }
 
