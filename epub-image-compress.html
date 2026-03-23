@@ -228,8 +228,8 @@
         <input type="number" id="maxHeight" value="1800" min="100" max="4000" />
       </div>
       <div>
-        <label for="quality">Quality (%):</label>
-        <input type="number" id="quality" value="85" min="1" max="100" />
+        <label for="targetPercent">Target size (% of resized):</label>
+        <input type="number" id="targetPercent" value="50" min="1" max="100" />
       </div>
     </div>
     <div class="controls-row">
@@ -246,7 +246,7 @@
         Skip cover image
       </label>
     </div>
-    <div class="hint">Images larger than max dimensions will be resized proportionally (if enabled). Quality affects JPG compression. Converting to JPG reduces file size. Skip cover image preserves the original cover quality.</div>
+    <div class="hint">Images larger than max dimensions will be resized proportionally (if enabled). Target size: the tool iteratively reduces JPEG quality until the output is at most this percentage of the resized file size (e.g. 50 = half the size). Converting to JPG reduces file size. Skip cover image preserves the original cover quality.</div>
 
     <button class="primary" id="compressBtn" disabled>Compress EPUB Images</button>
 
@@ -433,7 +433,7 @@
         // Get compression settings
         const maxWidth = parseInt(document.getElementById('maxWidth').value);
         const maxHeight = parseInt(document.getElementById('maxHeight').value);
-        const quality = parseInt(document.getElementById('quality').value) / 100;
+        const targetPercent = parseInt(document.getElementById('targetPercent').value);
         const enableResize = enableResizeCheckbox.checked;
         const convertToJpg = convertToJpgCheckbox.checked;
 
@@ -442,7 +442,7 @@
         for (const imageFile of imageFiles) {
           const imageData = await imageFile.file.async('blob');
 
-          const compressedBlob = await compressImage(imageData, maxWidth, maxHeight, quality, enableResize, convertToJpg);
+          const compressedBlob = await compressImage(imageData, maxWidth, maxHeight, targetPercent, enableResize, convertToJpg);
 
           // Only change extension to .jpg if the image was actually re-encoded (not the original blob)
           let outputPath = imageFile.path;
@@ -596,68 +596,65 @@
       return false;
     }
 
-    async function compressImage(blob, maxWidth, maxHeight, quality, enableResize, convertToJpg) {
+    function canvasToBlob(canvas, type, quality) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), type, quality);
+      });
+    }
+
+    async function compressImage(blob, maxWidth, maxHeight, targetPercent, enableResize, convertToJpg) {
       const cmyk = await isCMYKJpeg(blob);
 
-      return new Promise((resolve, reject) => {
-        const img = new Image();
+      const img = await new Promise((resolve, reject) => {
+        const i = new Image();
         const url = URL.createObjectURL(blob);
-
-        img.onload = async () => {
-          URL.revokeObjectURL(url);
-
-          // Calculate new dimensions
-          let width = img.width;
-          let height = img.height;
-          let needsResize = false;
-
-          if (enableResize && (width > maxWidth || height > maxHeight)) {
-            const ratio = Math.min(maxWidth / width, maxHeight / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-            needsResize = true;
-          }
-
-          // If no resize needed, no format conversion, and not CMYK, keep the original
-          if (!needsResize && !convertToJpg && !cmyk) {
-            resolve(blob);
-            return;
-          }
-
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          canvas.width = width;
-          canvas.height = height;
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Determine output format — CMYK must be re-encoded as JPEG (RGB)
-          const outputType = (convertToJpg || cmyk) ? 'image/jpeg' : (blob.type || 'image/jpeg');
-          const outputQuality = quality;
-
-          canvas.toBlob((compressedBlob) => {
-            if (compressedBlob) {
-              // For CMYK, always use the converted blob (color space must change)
-              if (cmyk) {
-                resolve(compressedBlob);
-              } else if (compressedBlob.size >= blob.size) {
-                // Keep the original if re-encoding made it larger
-                resolve(blob);
-              } else {
-                resolve(compressedBlob);
-              }
-            } else {
-              reject(new Error('Failed to compress image'));
-            }
-          }, outputType, outputQuality);
-        };
-
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error('Failed to load image'));
-        };
-
-        img.src = url;
+        i.onload = () => { URL.revokeObjectURL(url); resolve(i); };
+        i.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')); };
+        i.src = url;
       });
+
+      let width = img.width, height = img.height;
+      if (enableResize && (width > maxWidth || height > maxHeight)) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const outputType = (convertToJpg || cmyk) ? 'image/jpeg' : (blob.type || 'image/jpeg');
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Non-JPEG output: single pass, no quality iteration
+      if (outputType !== 'image/jpeg') {
+        const out = await canvasToBlob(canvas, outputType, 1);
+        return (!cmyk && out.size >= blob.size) ? blob : out;
+      }
+
+      // JPEG: get baseline at q=0.85, then reduce quality to hit target size
+      const baseline = await canvasToBlob(canvas, 'image/jpeg', 0.85);
+      const targetSize = baseline.size * (targetPercent / 100);
+
+      let quality = 0.80;
+      let best = baseline;
+      while (true) {
+        const candidate = await canvasToBlob(canvas, 'image/jpeg', quality);
+        if (candidate.size <= targetSize || quality <= 0.10) {
+          best = candidate;
+          break;
+        }
+        quality -= 0.05;
+      }
+
+      // For CMYK always use re-encoded result (color space must be fixed)
+      if (cmyk) return best;
+      // Keep the original if re-encoding didn't actually save space
+      return best.size >= blob.size ? blob : best;
     }
   </script>
 </body>
