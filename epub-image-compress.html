@@ -608,6 +608,11 @@
     //   2. All HTML/XHTML files: src/href attributes that reference the old filename
     // conversions: Map< oldZipPath, newZipPath >
     async function updateReferences(epubData, zip, conversions) {
+      // OPF hrefs are often URL-encoded (e.g. commas as %2C) while zip paths are decoded.
+      // Decode safely for comparison; replace only the extension so encoding is preserved.
+      const tryDecode = s => { try { return decodeURIComponent(s); } catch { return s; } };
+      const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
       try {
         // ── 1. OPF manifest ────────────────────────────────────────────────────
         const containerFile = epubData.file('META-INF/container.xml');
@@ -623,22 +628,22 @@
         const opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
         let opfXml = await opfFile.async('text');
 
-        for (const [oldZip, newZip] of conversions) {
-          const oldRel  = oldZip.startsWith(opfDir) ? oldZip.slice(opfDir.length) : oldZip;
-          const newRel  = newZip.startsWith(opfDir) ? newZip.slice(opfDir.length) : newZip;
-          const oldFile = oldRel.split('/').pop();
-          const newFile = newRel.split('/').pop();
+        for (const [oldZip] of conversions) {
+          // Decoded filename from zip path (e.g. "photo,name.png")
+          const oldFile = (oldZip.startsWith(opfDir) ? oldZip.slice(opfDir.length) : oldZip).split('/').pop();
 
           opfXml = opfXml.replace(/<item([^>]+)>/g, (tag, attrs) => {
             const hrefMatch = attrs.match(/href="([^"]+)"/);
             if (!hrefMatch) return tag;
             const href = hrefMatch[1];
-            if (href === oldRel || href === oldFile || href.endsWith('/' + oldFile)) {
-              return tag
-                .replace(`href="${href}"`, `href="${href.replace(oldFile, newFile)}"`)
-                .replace(/media-type="[^"]*"/, 'media-type="image/jpeg"');
-            }
-            return tag;
+            // Decode the href before comparing — OPF may use %2C etc.
+            const decodedFile = tryDecode(href).split('/').pop();
+            if (decodedFile !== oldFile) return tag;
+            // Replace only the extension in the original (possibly encoded) href
+            const newHref = href.replace(/\.(png|gif|webp)$/i, '.jpg');
+            return tag
+              .replace(`href="${href}"`, `href="${newHref}"`)
+              .replace(/media-type="[^"]*"/, 'media-type="image/jpeg"');
           });
         }
         zip.file(opfPath, opfXml);
@@ -659,16 +664,22 @@
           let changed = false;
 
           for (const [oldZip, newZip] of conversions) {
-            const oldFile = oldZip.split('/').pop();
-            const newFile = newZip.split('/').pop();
-            const esc = oldFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const oldFile = oldZip.split('/').pop(); // decoded
+            const newFile = newZip.split('/').pop(); // decoded
+            // Also build the URL-encoded form (src attrs may use %2C etc.)
+            const encOldFile = encodeURIComponent(oldFile);
+            const encNewFile = encodeURIComponent(newFile);
 
-            // Replace in src=".../<oldFile>" and href=".../<oldFile>"
-            // Two passes: preceded by / (path), or bare (value starts with filename)
-            const next = content
-              .replace(new RegExp(`((?:src|href)="[^"]*/)${esc}"`, 'g'), `$1${newFile}"`)
-              .replace(new RegExp(`((?:src|href)=")${esc}"`, 'g'),       `$1${newFile}"`);
-            if (next !== content) { content = next; changed = true; }
+            // Two pattern pairs: path-prefixed ( /filename ) and bare ( ="filename )
+            // Each tried for both plain and URL-encoded forms
+            for (const [from, to] of [[oldFile, newFile], [encOldFile, encNewFile]]) {
+              if (from === to) continue;
+              const esc = escRe(from);
+              const next = content
+                .replace(new RegExp(`((?:src|href)="[^"]*/)${esc}"`, 'g'), `$1${to}"`)
+                .replace(new RegExp(`((?:src|href)=")${esc}"`, 'g'),       `$1${to}"`);
+              if (next !== content) { content = next; changed = true; }
+            }
           }
 
           if (changed) zip.file(htmlPath, content);
