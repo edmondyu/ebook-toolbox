@@ -239,7 +239,13 @@
     // ── Chinese conversion helpers ─────────────────────────────────────────────
     // Two Private-Use-Area characters as separator between text nodes.
     // These are unaffected by the zhconvert API and its post-processing rules.
+    // Two Private-Use-Area characters as separator between text nodes.
+    // These are unaffected by the zhconvert API and its post-processing rules.
     const SEPARATOR = "\uE000\uE001";
+
+    // Maximum characters per API call. Keeps each request well within the
+    // Netlify function 10-second timeout.
+    const MAX_CHARS = 3000;
 
     async function callZhconvert(text) {
       const resp = await fetch("/.netlify/functions/zhconvert", {
@@ -276,6 +282,49 @@
     }
 
     /**
+     * Convert an array of text nodes in character-limited batches.
+     * Each batch is sent as a single API call; batches are separated by a
+     * 500 ms pause to respect rate limits.
+     * Returns an array of converted strings in the same order.
+     */
+    async function convertTextNodesBatched(textNodes) {
+      const results = new Array(textNodes.length);
+      let batchStart = 0;
+
+      while (batchStart < textNodes.length) {
+        // Accumulate nodes until adding the next one would exceed MAX_CHARS
+        let batchEnd = batchStart;
+        let charCount = 0;
+        while (batchEnd < textNodes.length) {
+          const nodeLen = textNodes[batchEnd].nodeValue.length;
+          // Always include at least one node even if it exceeds the limit
+          if (charCount + nodeLen > MAX_CHARS && batchEnd > batchStart) break;
+          charCount += nodeLen + SEPARATOR.length;
+          batchEnd++;
+        }
+
+        const batch    = textNodes.slice(batchStart, batchEnd);
+        const combined = batch.map(n => n.nodeValue).join(SEPARATOR);
+        const converted = await callZhconvert(combined);
+        const parts    = converted.split(SEPARATOR);
+
+        if (parts.length !== batch.length) {
+          log(`  Warning: separator mismatch in batch [${batchStart}–${batchEnd - 1}]. Keeping originals.`);
+          batch.forEach((n, i) => { results[batchStart + i] = n.nodeValue; });
+        } else {
+          parts.forEach((text, i) => { results[batchStart + i] = text; });
+        }
+
+        batchStart = batchEnd;
+
+        // Pause between batches (skip after the last one)
+        if (batchStart < textNodes.length) await new Promise(r => setTimeout(r, 500));
+      }
+
+      return results;
+    }
+
+    /**
      * Convert text nodes in an XHTML/HTML file.
      * Preserves the original XML declaration + DOCTYPE preamble.
      */
@@ -291,17 +340,8 @@
       const textNodes = collectTextNodes(doc, doc.documentElement);
       if (textNodes.length === 0) return content;
 
-      // Batch all text nodes into a single API call, separated by SEPARATOR
-      const combined = textNodes.map(n => n.nodeValue).join(SEPARATOR);
-      const converted = await callZhconvert(combined);
-      const parts = converted.split(SEPARATOR);
-
-      if (parts.length !== textNodes.length) {
-        log(`  Warning: separator mismatch (expected ${textNodes.length}, got ${parts.length}). Keeping original.`);
-        return content;
-      }
-
-      parts.forEach((text, i) => { textNodes[i].nodeValue = text; });
+      const converted = await convertTextNodesBatched(textNodes);
+      converted.forEach((text, i) => { textNodes[i].nodeValue = text; });
 
       // Preserve XML declaration / DOCTYPE that XMLSerializer does not emit
       const preambleMatch = content.match(/^([\s\S]*?)(?=<html[\s>])/i);
@@ -319,16 +359,8 @@
       const textNodes = collectTextNodes(doc, doc.documentElement);
       if (textNodes.length === 0) return content;
 
-      const combined = textNodes.map(n => n.nodeValue).join(SEPARATOR);
-      const converted = await callZhconvert(combined);
-      const parts = converted.split(SEPARATOR);
-
-      if (parts.length !== textNodes.length) {
-        log(`  Warning: separator mismatch in NCX. Keeping original.`);
-        return content;
-      }
-
-      parts.forEach((text, i) => { textNodes[i].nodeValue = text; });
+      const converted = await convertTextNodesBatched(textNodes);
+      converted.forEach((text, i) => { textNodes[i].nodeValue = text; });
 
       const preambleMatch = content.match(/^([\s\S]*?)(?=<ncx[\s>])/i);
       const preamble = preambleMatch ? preambleMatch[1] : "";
