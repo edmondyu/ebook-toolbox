@@ -346,7 +346,8 @@
       // XMLSerializer prepends <?xml …?> in most browsers; strip it so we
       // can restore only the original preamble (declaration + DOCTYPE).
       const serialized = new XMLSerializer().serializeToString(doc)
-        .replace(/^<\?xml[^?]*\?>\s*/, "");
+        .replace(/^<\?xml[^?]*\?>\s*/, "")
+        .replace(/^<!DOCTYPE[^>]*>\s*/i, "");
       const preambleMatch = content.match(/^([\s\S]*?)(?=<html[\s>])/i);
       const preamble = preambleMatch ? preambleMatch[1] : "";
       return preamble + serialized;
@@ -366,7 +367,8 @@
       converted.forEach((text, i) => { textNodes[i].nodeValue = text; });
 
       const serialized = new XMLSerializer().serializeToString(doc)
-        .replace(/^<\?xml[^?]*\?>\s*/, "");
+        .replace(/^<\?xml[^?]*\?>\s*/, "")
+        .replace(/^<!DOCTYPE[^>]*>\s*/i, "");
       const preambleMatch = content.match(/^([\s\S]*?)(?=<ncx[\s>])/i);
       const preamble = preambleMatch ? preambleMatch[1] : "";
       return preamble + serialized;
