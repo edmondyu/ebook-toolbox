@@ -553,14 +553,21 @@
         }
       }
 
-      // Apply styles to matched paragraphs
-      docXml = paragraphs.map(p => {
-        if (!p.matched) return p.paraXml;
-        const oldStyleMatch = p.paraXml.match(/<w:pStyle[^>]+w:val="([^"]+)"/);
-        const oldStyle = oldStyleMatch ? oldStyleMatch[1] : '(default)';
-        results.push({ text: p.text.trim(), oldStyle, level: p.appliedLevel });
-        return setParaStyle(p.paraXml, p.styleId);
-      }).join('');
+      // Build a map of original paraXml to modified version for replacement
+      const paraReplacements = {};
+      paragraphs.forEach(p => {
+        if (p.matched) {
+          const oldStyleMatch = p.paraXml.match(/<w:pStyle[^>]+w:val="([^"]+)"/);
+          const oldStyle = oldStyleMatch ? oldStyleMatch[1] : '(default)';
+          results.push({ text: p.text.trim(), oldStyle, level: p.appliedLevel });
+          paraReplacements[p.paraXml] = setParaStyle(p.paraXml, p.styleId);
+        }
+      });
+
+      // Apply styles to matched paragraphs by replacing in original docXml
+      docXml = docXml.replace(/<w:p[\s>][\s\S]*?<\/w:p>/g, paraXml => {
+        return paraReplacements[paraXml] || paraXml;
+      });
 
       if (results.length === 0) return { results, blob: null };
 
