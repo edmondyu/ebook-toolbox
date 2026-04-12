@@ -1042,11 +1042,30 @@
             }
           }
 
-          // Fetch pixel data (cache by name to avoid duplicate fetches)
+          // Fetch pixel data (cache by name to avoid duplicate fetches).
+          // Some images live in page.commonObjs instead of page.objs (e.g. shared
+          // Form XObject resources). Try objs first with a timeout, then commonObjs.
           const cache = {};
           for (const p of rawPlacements) {
-            if (p.name && !cache[p.name])
-              cache[p.name] = await new Promise(resolve => page.objs.get(p.name, resolve));
+            if (p.name && !cache[p.name]) {
+              let imgData = null;
+              try {
+                imgData = await Promise.race([
+                  new Promise(resolve => page.objs.get(p.name, resolve)),
+                  new Promise((_, reject) => setTimeout(() => reject('timeout'), 3000))
+                ]);
+              } catch (_) {
+                try {
+                  imgData = await Promise.race([
+                    new Promise(resolve => page.commonObjs.get(p.name, resolve)),
+                    new Promise((_, reject) => setTimeout(() => reject('timeout'), 3000))
+                  ]);
+                } catch (_2) {
+                  log(`Page ${pageNum}: warning – could not fetch image "${p.name}", skipping.`);
+                }
+              }
+              cache[p.name] = imgData;
+            }
           }
 
           // Build page-space bounding box for each image placement.
