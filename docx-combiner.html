@@ -464,6 +464,15 @@
         'endnotes.xml'
       ];
 
+      // Document-specific relationships that shouldn't be merged
+      // (footers, headers, customXml, etc. are unique per document)
+      const excludeRelTypes = [
+        'footer',
+        'header',
+        'customXml',
+        'hyperlink'  // hyperlinks may reference external URLs specific to each doc
+      ];
+
       const additionalRelships = additionalRelsXml.match(/<Relationship[^>]*\/>/g) || [];
       let newRelships = '';
 
@@ -477,6 +486,7 @@
           const oldId = oldIdMatch[1];
           const newId = idMap[oldId];
           const target = targetMatch[1];
+          const type = typeMatch[1];
 
           // Skip relationships to shared files (they should only reference the base/merged versions)
           const isSharedFile = sharedFilePatterns.some(pattern => target.includes(pattern));
@@ -484,8 +494,14 @@
             return; // Don't add this relationship
           }
 
+          // Skip document-specific relationship types
+          const isExcludedType = excludeRelTypes.some(excludeType => type.toLowerCase().includes(excludeType));
+          if (isExcludedType) {
+            return; // Don't add this relationship
+          }
+
           // Create new relationship
-          let newRel = '<Relationship Id="' + newId + '" Type="' + typeMatch[1] + '" Target="' + target + '"';
+          let newRel = '<Relationship Id="' + newId + '" Type="' + type + '" Target="' + target + '"';
           if (targetModeMatch) newRel += ' TargetMode="' + targetModeMatch[1] + '"';
           newRel += '/>';
           newRelships += newRel;
