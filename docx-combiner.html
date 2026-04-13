@@ -330,10 +330,14 @@
         const additionalBodyMatch = additionalDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
         if (!additionalBodyMatch) continue;
 
+        // Build relationship ID map for this document
+        const idMap = buildRelIdMap(additionalRelsXml, maxRelId);
+        const remappedBody = remapBodyRelIds(additionalBodyMatch[1], idMap);
+
         // Add page break before the additional content
         const pageBreak = '<w:p><w:pPr><w:pageBreakBefore/></w:pPr></w:p>';
         combinedBodyContent += pageBreak;
-        combinedBodyContent += additionalBodyMatch[1];
+        combinedBodyContent += remappedBody;
 
         // Merge styles (avoid duplicates)
         if (additionalStylesXml) {
@@ -342,7 +346,7 @@
 
         // Handle relationships and update maxRelId
         if (additionalRelsXml) {
-          const mergeResult = mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, baseContentTypesXml, maxRelId);
+          const mergeResult = mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, baseContentTypesXml, idMap);
           baseRelsXml = mergeResult.relsXml;
           baseContentTypesXml = mergeResult.contentTypesXml;
           maxRelId = mergeResult.nextRelId;
@@ -378,6 +382,34 @@
       return blob;
     }
 
+    function buildRelIdMap(relsXml, startFromId) {
+      const idMap = {};
+      let nextId = startFromId;
+      const relationships = relsXml.match(/<Relationship[^>]*\/>/g) || [];
+      relationships.forEach(rel => {
+        const idMatch = rel.match(/Id="([^"]+)"/);
+        if (idMatch) {
+          idMap[idMatch[1]] = 'rId' + nextId;
+          nextId++;
+        }
+      });
+      return { map: idMap, nextId };
+    }
+
+    function remapBodyRelIds(bodyXml, idMapObj) {
+      // Replace all relationship references with new IDs
+      const { map } = idMapObj;
+      let result = bodyXml;
+
+      // Replace r:embed, r:link, and other relationship attributes
+      for (const [oldId, newId] of Object.entries(map)) {
+        // Match all attributes that reference relationship IDs
+        result = result.replace(new RegExp('(r:embed|r:link|r:id)="' + oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"', 'g'), '$1="' + newId + '"');
+      }
+
+      return result;
+    }
+
     function mergeStyles(baseXml, additionalXml) {
       // Extract style definitions (simple approach: avoid exact duplicates)
       const baseStyleIds = new Set();
@@ -405,14 +437,12 @@
       return baseXml;
     }
 
-    function mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, baseContentTypesXml, startMaxRelId) {
-      // Map old relationship IDs to new ones in the additional file
-      const idMap = {};
-      let nextRelId = startMaxRelId;
+    function mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, baseContentTypesXml, idMapObj) {
+      const { map: idMap, nextId: nextRelId } = idMapObj;
+      let updatedContentTypesXml = baseContentTypesXml;
 
       const additionalRelships = additionalRelsXml.match(/<Relationship[^>]*\/>/g) || [];
       let newRelships = '';
-      let updatedContentTypesXml = baseContentTypesXml;
 
       additionalRelships.forEach(rel => {
         const oldIdMatch = rel.match(/Id="([^"]+)"/);
@@ -422,10 +452,8 @@
 
         if (oldIdMatch && typeMatch && targetMatch) {
           const oldId = oldIdMatch[1];
-          const newId = 'rId' + nextRelId;
+          const newId = idMap[oldId];
           const target = targetMatch[1];
-          idMap[oldId] = newId;
-          nextRelId++;
 
           // Create new relationship
           let newRel = '<Relationship Id="' + newId + '" Type="' + typeMatch[1] + '" Target="' + target + '"';
