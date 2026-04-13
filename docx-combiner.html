@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Combine DOCX – Toolbox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background: #131313;
+      color: #f9f9f9;
+    }
+    h1, h2, h3 { margin-top: 0; margin-bottom: 0.25rem; color: #50e3c2; }
+    .subtitle { margin-top: 0; margin-bottom: 1.5rem; color: #9ca3af; font-size: 0.95rem; }
+    .card {
+      background: #1f1f1f;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      margin-bottom: 1.5rem;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+    }
+    button.primary { background: #50e3c2; color: #131313; font-weight: 600; }
+    button.primary:hover:not(:disabled) { background: #3dd4b3; }
+    button.secondary { background: #3a3a3a; color: #f9f9f9; }
+    button.secondary:hover:not(:disabled) { background: #4a4a4a; }
+    button.danger { background: transparent; color: #f87171; border: 1px solid #7f1d1d; padding: 0.3rem 0.7rem; font-size: 0.85rem; }
+    button.danger:hover { background: #2d1515; }
+    button:disabled { opacity: 0.6; cursor: default; }
+    label.field-label {
+      color: #50e3c2;
+      font-size: 0.9rem;
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    input[type="text"], select {
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid #3a3a3a;
+      background: #2a2a2a;
+      color: #f9f9f9;
+      font-size: 0.9rem;
+    }
+    .hint { font-size: 0.85rem; color: #9ca3af; margin-top: 0.3rem; margin-bottom: 1rem; }
+    a.back {
+      display: inline-block;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      text-decoration: none;
+      color: #50e3c2;
+    }
+    a.back:hover { color: #3dd4b3; }
+    .drop-zone {
+      position: relative;
+      border: 2px dashed #3a3a3a;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s;
+      background: #2a2a2a;
+      margin-bottom: 1rem;
+    }
+    .drop-zone.drag-over { border-color: #50e3c2; background: #1a3a35; }
+    .drop-zone p { margin: 0.5rem 0; color: #9ca3af; }
+    .drop-zone .drop-icon { font-size: 2rem; margin-bottom: 0.5rem; color: #50e3c2; }
+    .drop-zone input[type="file"] { display: none; }
+    .drop-zone .file-input-wrapper { margin-top: 1rem; }
+    .drop-zone .browse-btn {
+      background: #3a3a3a; color: #f9f9f9; padding: 0.5rem 1rem;
+      border-radius: 6px; cursor: pointer; display: inline-block; font-size: 0.9rem;
+    }
+    .drop-zone .browse-btn:hover { background: #4a4a4a; }
+    .error-msg {
+      color: #f87171;
+      background: #2d1515;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+      margin-top: 0.75rem;
+    }
+    .file-list {
+      margin: 1rem 0;
+    }
+    .file-item {
+      background: #2a2a2a;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .file-item-name {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+    }
+    .file-item-icon { font-size: 1.2rem; }
+    .file-item-text { color: #d1d5db; font-size: 0.9rem; }
+    .file-item-text .order { color: #9ca3af; font-size: 0.8rem; margin-right: 0.5rem; }
+    .file-item-remove { cursor: pointer; }
+    .summary-msg { font-size: 0.95rem; margin-bottom: 1rem; color: #f9f9f9; }
+    .summary-msg strong { color: #50e3c2; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+  <a class="back" href="index.html">← Back to Toolbox</a>
+
+  <h1>Combine DOCX</h1>
+  <p class="subtitle">
+    Upload multiple DOCX files and combine them into a single document. Files are merged in alphabetical order by filename.
+  </p>
+
+  <!-- Step 1 -->
+  <div class="card">
+    <h2>1. Upload DOCX Files</h2>
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-icon">📄</div>
+      <p><strong>Drag and drop .docx files here</strong></p>
+      <p>or</p>
+      <div class="file-input-wrapper">
+        <label for="fileInput" class="browse-btn">Browse Files</label>
+        <input type="file" id="fileInput" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple />
+      </div>
+    </div>
+    <div id="errorMsg" class="error-msg" style="display:none;"></div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="card" id="filesCard" style="display:none;">
+    <h2>2. Files to Combine</h2>
+    <p class="hint">Files will be combined in alphabetical order by filename.</p>
+    <div id="fileList" class="file-list"></div>
+    <div style="margin-top:1.5rem;">
+      <button id="combineBtn" class="primary">Combine Files</button>
+      <button id="clearBtn" class="secondary">Clear Files</button>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="card" id="resultsCard" style="display:none;">
+    <h2>3. Done!</h2>
+    <div id="resultsSummary" class="summary-msg"></div>
+    <div style="margin-top:1rem;">
+      <button id="downloadBtn" class="primary">Download Combined DOCX</button>
+    </div>
+  </div>
+
+  <script>
+    let selectedFiles = [];
+    let outputBlob = null;
+    let outputFilename = '';
+
+    // ── Drag & drop ──────────────────────────────────────────────────────────
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const filesCard = document.getElementById('filesCard');
+    const fileList = document.getElementById('fileList');
+    const combineBtn = document.getElementById('combineBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+    ['dragenter','dragover','dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, preventDefaults));
+    dropZone.addEventListener('dragenter', () => dropZone.classList.add('drag-over'));
+    dropZone.addEventListener('dragover',  () => dropZone.classList.add('drag-over'));
+    dropZone.addEventListener('dragleave', e => { if (e.target === dropZone) dropZone.classList.remove('drag-over'); });
+    dropZone.addEventListener('drop', e => {
+      dropZone.classList.remove('drag-over');
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || f.name.endsWith('.docx'));
+      if (files.length) addFiles(files);
+    });
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) addFiles(Array.from(fileInput.files));
+    });
+
+    function addFiles(newFiles) {
+      selectedFiles.push(...newFiles);
+      renderFileList();
+      fileInput.value = '';
+    }
+
+    function renderFileList() {
+      // Sort alphabetically by filename
+      const sorted = [...selectedFiles].sort((a, b) => a.name.localeCompare(b.name));
+
+      fileList.innerHTML = sorted.map((f, idx) =>
+        '<div class="file-item">' +
+          '<div class="file-item-name">' +
+            '<div class="file-item-icon">📄</div>' +
+            '<div class="file-item-text">' +
+              '<span class="order">' + (idx + 1) + '.</span>' +
+              '<strong>' + escHtml(f.name) + '</strong>' +
+            '</div>' +
+          '</div>' +
+          '<button class="danger remove-file-btn" data-filename="' + escHtml(f.name) + '">Remove</button>' +
+        '</div>'
+      ).join('');
+
+      // Attach remove listeners
+      fileList.querySelectorAll('.remove-file-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const filename = btn.getAttribute('data-filename');
+          selectedFiles = selectedFiles.filter(f => f.name !== filename);
+          renderFileList();
+          if (selectedFiles.length === 0) {
+            filesCard.style.display = 'none';
+            document.getElementById('resultsCard').style.display = 'none';
+          }
+        });
+      });
+
+      filesCard.style.display = selectedFiles.length > 0 ? 'block' : 'none';
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── Clear button ──────────────────────────────────────────────────────────
+    clearBtn.addEventListener('click', () => {
+      selectedFiles = [];
+      renderFileList();
+      filesCard.style.display = 'none';
+      document.getElementById('resultsCard').style.display = 'none';
+      fileInput.value = '';
+    });
+
+    // ── Combine button ────────────────────────────────────────────────────────
+    combineBtn.addEventListener('click', async () => {
+      const errorEl = document.getElementById('errorMsg');
+      errorEl.style.display = 'none';
+
+      if (selectedFiles.length === 0) {
+        showError('Please upload at least one DOCX file.');
+        return;
+      }
+
+      combineBtn.disabled = true;
+      combineBtn.textContent = 'Processing…';
+
+      try {
+        const blob = await combineDocxFiles(selectedFiles);
+        outputBlob = blob;
+        outputFilename = 'combined_' + new Date().toISOString().slice(0,10) + '.docx';
+        showResults();
+      } catch (e) {
+        showError('Error: ' + (e.message || String(e)));
+      } finally {
+        combineBtn.disabled = false;
+        combineBtn.textContent = 'Combine Files';
+      }
+    });
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function showResults() {
+      // Sort alphabetically for summary
+      const sorted = [...selectedFiles].sort((a, b) => a.name.localeCompare(b.name));
+      document.getElementById('resultsSummary').innerHTML =
+        '<strong>' + sorted.length + '</strong> file' + (sorted.length === 1 ? '' : 's') +
+        ' successfully combined: <strong>' + sorted.map(f => f.name).join(', ') + '</strong>';
+      document.getElementById('resultsCard').style.display = 'block';
+      document.getElementById('resultsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ── Download button ───────────────────────────────────────────────────────
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      if (!outputBlob) return;
+      const url = URL.createObjectURL(outputBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = outputFilename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    });
+
+    // ── Core DOCX combining ───────────────────────────────────────────────────
+    async function combineDocxFiles(files) {
+      // Sort files alphabetically by filename
+      const sortedFiles = [...files].sort((a, b) => a.name.localeCompare(b.name));
+
+      // Load the first DOCX as the base
+      const baseZip = await JSZip.loadAsync(await sortedFiles[0].arrayBuffer());
+
+      let baseDocXml = await baseZip.file('word/document.xml').async('string');
+      let baseStylesXml = baseZip.file('word/styles.xml') ? await baseZip.file('word/styles.xml').async('string') : '';
+      let baseRelsXml = baseZip.file('word/_rels/document.xml.rels') ? await baseZip.file('word/_rels/document.xml.rels').async('string') : '';
+
+      // Extract the body content from base document
+      const bodyMatch = baseDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
+      if (!bodyMatch) throw new Error('Invalid DOCX: missing document body in first file.');
+
+      let combinedBodyContent = bodyMatch[1];
+
+      // Track image relationships for proper numbering
+      let maxRelId = 1;
+      const relIdMatch = baseRelsXml.match(/Id="rId(\d+)"/g);
+      if (relIdMatch) {
+        const ids = relIdMatch.map(m => parseInt(m.match(/\d+/)[0], 10));
+        maxRelId = Math.max(...ids) + 1;
+      }
+
+      // Process each additional file
+      for (let i = 1; i < sortedFiles.length; i++) {
+        const additionalZip = await JSZip.loadAsync(await sortedFiles[i].arrayBuffer());
+
+        let additionalDocXml = await additionalZip.file('word/document.xml').async('string');
+        let additionalStylesXml = additionalZip.file('word/styles.xml') ? await additionalZip.file('word/styles.xml').async('string') : '';
+        let additionalRelsXml = additionalZip.file('word/_rels/document.xml.rels') ? await additionalZip.file('word/_rels/document.xml.rels').async('string') : '';
+
+        // Extract body content
+        const additionalBodyMatch = additionalDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
+        if (!additionalBodyMatch) continue;
+
+        // Add page break before the additional content
+        const pageBreak = '<w:p><w:pPr><w:pageBreakBefore/></w:pPr></w:p>';
+        combinedBodyContent += pageBreak;
+        combinedBodyContent += additionalBodyMatch[1];
+
+        // Merge styles (avoid duplicates)
+        if (additionalStylesXml) {
+          baseStylesXml = mergeStyles(baseStylesXml, additionalStylesXml);
+        }
+
+        // Handle relationships (for images, headers, footers, etc.)
+        if (additionalRelsXml) {
+          baseRelsXml = mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, maxRelId);
+        }
+
+        // Copy over any media files
+        for (const [path, file] of Object.entries(additionalZip.files)) {
+          if (path.startsWith('word/media/')) {
+            const data = await file.async('arraybuffer');
+            baseZip.file(path, data);
+          }
+        }
+      }
+
+      // Reconstruct document.xml with combined body
+      const finalDocXml = baseDocXml.replace(/<w:body>[\s\S]*<\/w:body>/, '<w:body>' + combinedBodyContent + '</w:body>');
+      baseZip.file('word/document.xml', finalDocXml, { compression: 'DEFLATE' });
+
+      // Update styles.xml
+      if (baseStylesXml) {
+        baseZip.file('word/styles.xml', baseStylesXml, { compression: 'DEFLATE' });
+      }
+
+      // Update relationships
+      if (baseRelsXml) {
+        baseZip.file('word/_rels/document.xml.rels', baseRelsXml, { compression: 'DEFLATE' });
+      }
+
+      // Generate the combined DOCX
+      const blob = await baseZip.generateAsync({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        compression: 'DEFLATE'
+      });
+
+      return blob;
+    }
+
+    function mergeStyles(baseXml, additionalXml) {
+      // Extract style definitions (simple approach: avoid exact duplicates)
+      const baseStyleIds = new Set();
+      const baseStyleBlocks = baseXml.match(/<w:style[^>]*w:styleId="([^"]+)"/g) || [];
+      baseStyleBlocks.forEach(b => {
+        const m = b.match(/w:styleId="([^"]+)"/);
+        if (m) baseStyleIds.add(m[1]);
+      });
+
+      // Extract styles from additional XML
+      const additionalStyles = additionalXml.match(/<w:style[^>]*>[\s\S]*?<\/w:style>/g) || [];
+      let toInject = '';
+      additionalStyles.forEach(style => {
+        const idMatch = style.match(/w:styleId="([^"]+)"/);
+        if (idMatch && !baseStyleIds.has(idMatch[1])) {
+          toInject += style;
+          baseStyleIds.add(idMatch[1]);
+        }
+      });
+
+      // Inject new styles before closing </w:styles>
+      if (toInject) {
+        baseXml = baseXml.replace(/<\/w:styles>/, toInject + '</w:styles>');
+      }
+      return baseXml;
+    }
+
+    function mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, startMaxRelId) {
+      // Map old relationship IDs to new ones in the additional file
+      const idMap = {};
+      let nextRelId = startMaxRelId;
+
+      const additionalRelships = additionalRelsXml.match(/<Relationship[^>]*\/>/g) || [];
+      let newRelships = '';
+
+      additionalRelships.forEach(rel => {
+        const oldIdMatch = rel.match(/Id="([^"]+)"/);
+        const typeMatch = rel.match(/Type="([^"]+)"/);
+        const targetMatch = rel.match(/Target="([^"]+)"/);
+        const targetModeMatch = rel.match(/TargetMode="([^"]+)"/);
+
+        if (oldIdMatch && typeMatch && targetMatch) {
+          const oldId = oldIdMatch[1];
+          const newId = 'rId' + nextRelId;
+          idMap[oldId] = newId;
+          nextRelId++;
+
+          // Create new relationship
+          let newRel = '<Relationship Id="' + newId + '" Type="' + typeMatch[1] + '" Target="' + targetMatch[1] + '"';
+          if (targetModeMatch) newRel += ' TargetMode="' + targetModeMatch[1] + '"';
+          newRel += '/>';
+          newRelships += newRel;
+        }
+      });
+
+      // Inject new relationships
+      if (newRelships) {
+        baseRelsXml = baseRelsXml.replace(/<\/Relationships>/, newRelships + '</Relationships>');
+      }
+
+      return baseRelsXml;
+    }
+  </script>
+</body>
+</html>
