@@ -302,6 +302,7 @@
       let baseDocXml = await baseZip.file('word/document.xml').async('string');
       let baseStylesXml = baseZip.file('word/styles.xml') ? await baseZip.file('word/styles.xml').async('string') : '';
       let baseRelsXml = baseZip.file('word/_rels/document.xml.rels') ? await baseZip.file('word/_rels/document.xml.rels').async('string') : '';
+      let baseContentTypesXml = baseZip.file('[Content_Types].xml') ? await baseZip.file('[Content_Types].xml').async('string') : '';
 
       // Extract the body content from base document
       const bodyMatch = baseDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
@@ -309,7 +310,7 @@
 
       let combinedBodyContent = bodyMatch[1];
 
-      // Track image relationships for proper numbering
+      // Track maximum relationship ID
       let maxRelId = 1;
       const relIdMatch = baseRelsXml.match(/Id="rId(\d+)"/g);
       if (relIdMatch) {
@@ -339,17 +340,12 @@
           baseStylesXml = mergeStyles(baseStylesXml, additionalStylesXml);
         }
 
-        // Handle relationships (for images, headers, footers, etc.)
+        // Handle relationships and update maxRelId
         if (additionalRelsXml) {
-          baseRelsXml = mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, maxRelId);
-        }
-
-        // Copy over any media files
-        for (const [path, file] of Object.entries(additionalZip.files)) {
-          if (path.startsWith('word/media/')) {
-            const data = await file.async('arraybuffer');
-            baseZip.file(path, data);
-          }
+          const mergeResult = mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, baseContentTypesXml, maxRelId);
+          baseRelsXml = mergeResult.relsXml;
+          baseContentTypesXml = mergeResult.contentTypesXml;
+          maxRelId = mergeResult.nextRelId;
         }
       }
 
@@ -365,6 +361,11 @@
       // Update relationships
       if (baseRelsXml) {
         baseZip.file('word/_rels/document.xml.rels', baseRelsXml, { compression: 'DEFLATE' });
+      }
+
+      // Update content types
+      if (baseContentTypesXml) {
+        baseZip.file('[Content_Types].xml', baseContentTypesXml, { compression: 'DEFLATE' });
       }
 
       // Generate the combined DOCX
@@ -404,13 +405,14 @@
       return baseXml;
     }
 
-    function mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, startMaxRelId) {
+    function mergeRels(baseRelsXml, additionalRelsXml, additionalZip, baseZip, baseContentTypesXml, startMaxRelId) {
       // Map old relationship IDs to new ones in the additional file
       const idMap = {};
       let nextRelId = startMaxRelId;
 
       const additionalRelships = additionalRelsXml.match(/<Relationship[^>]*\/>/g) || [];
       let newRelships = '';
+      let updatedContentTypesXml = baseContentTypesXml;
 
       additionalRelships.forEach(rel => {
         const oldIdMatch = rel.match(/Id="([^"]+)"/);
@@ -421,14 +423,24 @@
         if (oldIdMatch && typeMatch && targetMatch) {
           const oldId = oldIdMatch[1];
           const newId = 'rId' + nextRelId;
+          const target = targetMatch[1];
           idMap[oldId] = newId;
           nextRelId++;
 
           // Create new relationship
-          let newRel = '<Relationship Id="' + newId + '" Type="' + typeMatch[1] + '" Target="' + targetMatch[1] + '"';
+          let newRel = '<Relationship Id="' + newId + '" Type="' + typeMatch[1] + '" Target="' + target + '"';
           if (targetModeMatch) newRel += ' TargetMode="' + targetModeMatch[1] + '"';
           newRel += '/>';
           newRelships += newRel;
+
+          // If it's a media file, ensure it's registered in [Content_Types].xml
+          if (target.startsWith('media/')) {
+            const ext = target.split('.').pop().toLowerCase();
+            const mimeType = getMimeType(ext);
+            if (mimeType && !updatedContentTypesXml.includes('Extension="' + ext + '"')) {
+              updatedContentTypesXml = updatedContentTypesXml.replace(/<\/Types>/, '<Default Extension="' + ext + '" ContentType="' + mimeType + '"/></Types>');
+            }
+          }
         }
       });
 
@@ -437,7 +449,20 @@
         baseRelsXml = baseRelsXml.replace(/<\/Relationships>/, newRelships + '</Relationships>');
       }
 
-      return baseRelsXml;
+      return { relsXml: baseRelsXml, contentTypesXml: updatedContentTypesXml, nextRelId };
+    }
+
+    function getMimeType(ext) {
+      const mimeTypes = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'bmp': 'image/bmp',
+        'svg': 'image/svg+xml',
+        'webp': 'image/webp'
+      };
+      return mimeTypes[ext] || null;
     }
   </script>
 </body>
