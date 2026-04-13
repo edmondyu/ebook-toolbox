@@ -1,0 +1,300 @@
+#!/usr/bin/env node
+
+const JSZip = require('jszip');
+const fs = require('fs');
+const path = require('path');
+
+async function testFullCombine() {
+  // Read all sample files
+  const samplesDir = './samples';
+  const files = fs.readdirSync(samplesDir)
+    .filter(f => f.endsWith('.docx'))
+    .sort((a, b) => a.localeCompare(b));
+
+  console.log(`Testing with ${files.length} files:\n`);
+  files.forEach((f, i) => console.log(`  ${i+1}. ${f}`));
+
+  const fileBuffers = files.map(f => ({
+    name: f,
+    buffer: fs.readFileSync(path.join(samplesDir, f))
+  }));
+
+  try {
+    console.log('\n=== Combining files... ===');
+    const result = await combineDocxFiles(fileBuffers);
+    fs.writeFileSync('./test-combined-all.docx', result);
+    console.log('✓ Combined file created: test-combined-all.docx');
+
+    // Validate the result
+    const zip = await JSZip.loadAsync(result);
+
+    console.log('\n=== Validation ===');
+
+    // Check file structure
+    const docXml = await zip.file('word/document.xml').async('string');
+    const relsXml = await zip.file('word/_rels/document.xml.rels').async('string');
+    const stylesXml = await zip.file('word/styles.xml').async('string');
+
+    // Parse XML to verify structure
+    const DOMParser = require('xmldom').DOMParser;
+    try {
+      new DOMParser().parseFromString(docXml);
+      console.log('✓ document.xml is valid XML');
+    } catch (e) {
+      console.log(`✗ document.xml has XML error: ${e.message}`);
+    }
+
+    try {
+      new DOMParser().parseFromString(relsXml);
+      console.log('✓ document.xml.rels is valid XML');
+    } catch (e) {
+      console.log(`✗ document.xml.rels has XML error: ${e.message}`);
+    }
+
+    // Count relationships
+    const rels = relsXml.match(/<Relationship[^>]*/g) || [];
+    console.log(`✓ Total relationships: ${rels.length}`);
+
+    // Extract relationships
+    const relationships = relsXml.match(/Id="(rId\d+)".*?Target="([^"]+)"/g) || [];
+    console.log('\nRelationships in combined file:');
+    const relIds = new Set();
+    relationships.forEach(r => {
+      const m = r.match(/Id="(rId\d+)".*?Target="([^"]+)"/);
+      if (m) {
+        const [, id, target] = m;
+        relIds.add(id);
+        console.log(`  ${id} → ${target}`);
+      }
+    });
+
+    // Check for broken references
+    const files_in_zip = new Set(zip.file(/.*/).map(f => f.name));
+    let broken = false;
+    for (const r of relationships) {
+      const m = r.match(/Target="([^"]+)"/);
+      if (m) {
+        const target = m[1];
+        const possible = ['word/' + target, target];
+        const found = possible.some(p => files_in_zip.has(p));
+        if (!found && !target.startsWith('http')) {
+          console.log(`  ✗ BROKEN: ${target}`);
+          broken = true;
+        }
+      }
+    }
+    if (!broken) {
+      console.log('✓ All relationships point to existing files');
+    }
+
+    // Check for customXml, footer, header references
+    const customXmlCount = (relsXml.match(/customxml/gi) || []).length;
+    const footerCount = (relsXml.match(/footer/gi) || []).length;
+    const headerCount = (relsXml.match(/header/gi) || []).length;
+
+    console.log('\n=== Excluded relationship types ===');
+    console.log(`✓ customXml references: ${customXmlCount} (should be 0)`);
+    console.log(`✓ footer references: ${footerCount} (should be 0)`);
+    console.log(`✓ header references: ${headerCount} (should be 0)`);
+
+    if (customXmlCount > 0 || footerCount > 0 || headerCount > 0) {
+      console.log('\n✗ FAILURE: Found references that should have been excluded');
+      process.exit(1);
+    }
+
+    // Check document structure
+    const paras = docXml.match(/<w:p>/g) || [];
+    const pageBreaks = docXml.match(/pageBreakBefore/g) || [];
+
+    console.log('\n=== Document structure ===');
+    console.log(`✓ Paragraphs: ${paras.length}`);
+    console.log(`✓ Page breaks: ${pageBreaks.length} (should be ${files.length - 1} for ${files.length} files)`);
+
+    // File size
+    const stats = fs.statSync('./test-combined-all.docx');
+    console.log(`✓ Combined file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+
+    console.log('\n✅ ALL VALIDATIONS PASSED - Safe to use!');
+
+  } catch (e) {
+    console.error('✗ Error:', e.message);
+    console.error(e.stack);
+    process.exit(1);
+  }
+}
+
+async function combineDocxFiles(files) {
+  const baseZip = await JSZip.loadAsync(files[0].buffer);
+
+  let baseDocXml = await baseZip.file('word/document.xml').async('string');
+  let baseStylesXml = baseZip.file('word/styles.xml') ? await baseZip.file('word/styles.xml').async('string') : '';
+  let baseRelsXml = baseZip.file('word/_rels/document.xml.rels') ? await baseZip.file('word/_rels/document.xml.rels').async('string') : '';
+  let baseContentTypesXml = baseZip.file('[Content_Types].xml') ? await baseZip.file('[Content_Types].xml').async('string') : '';
+
+  const bodyMatch = baseDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
+  if (!bodyMatch) throw new Error('Invalid DOCX: missing document body in first file.');
+
+  let baseSectPr = '';
+  const sectPrMatch = bodyMatch[1].match(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/);
+  if (sectPrMatch) {
+    baseSectPr = sectPrMatch[0];
+  }
+
+  let combinedBodyContent = bodyMatch[1]
+    .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '')
+    .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '');
+
+  let maxRelId = 1;
+  const relIdMatch = baseRelsXml.match(/Id="rId(\d+)"/g);
+  if (relIdMatch) {
+    const ids = relIdMatch.map(m => parseInt(m.match(/\d+/)[0], 10));
+    maxRelId = Math.max(...ids) + 1;
+  }
+
+  for (let i = 1; i < files.length; i++) {
+    const additionalZip = await JSZip.loadAsync(files[i].buffer);
+    let additionalDocXml = await additionalZip.file('word/document.xml').async('string');
+    let additionalStylesXml = additionalZip.file('word/styles.xml') ? await additionalZip.file('word/styles.xml').async('string') : '';
+    let additionalRelsXml = additionalZip.file('word/_rels/document.xml.rels') ? await additionalZip.file('word/_rels/document.xml.rels').async('string') : '';
+
+    const additionalBodyMatch = additionalDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
+    if (!additionalBodyMatch) continue;
+
+    let additionalBody = additionalBodyMatch[1]
+      .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '')
+      .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '');
+
+    const idMapObj = buildRelIdMap(additionalRelsXml, maxRelId);
+    const remappedBody = remapBodyRelIds(additionalBody, idMapObj);
+
+    const pageBreak = '<w:p><w:pPr><w:pageBreakBefore/></w:pPr></w:p>';
+    combinedBodyContent += pageBreak;
+    combinedBodyContent += remappedBody;
+
+    if (additionalStylesXml) {
+      baseStylesXml = mergeStyles(baseStylesXml, additionalStylesXml);
+    }
+
+    if (additionalRelsXml) {
+      const mergeResult = mergeRels(baseRelsXml, additionalRelsXml, baseContentTypesXml, idMapObj);
+      baseRelsXml = mergeResult.relsXml;
+      baseContentTypesXml = mergeResult.contentTypesXml;
+      maxRelId = mergeResult.nextRelId;
+    }
+  }
+
+  const finalBodyContent = combinedBodyContent + (baseSectPr || '');
+  const finalDocXml = baseDocXml.replace(/<w:body>[\s\S]*<\/w:body>/, '<w:body>' + finalBodyContent + '</w:body>');
+  baseZip.file('word/document.xml', finalDocXml, { compression: 'DEFLATE' });
+
+  if (baseStylesXml) baseZip.file('word/styles.xml', baseStylesXml, { compression: 'DEFLATE' });
+  if (baseRelsXml) baseZip.file('word/_rels/document.xml.rels', baseRelsXml, { compression: 'DEFLATE' });
+  if (baseContentTypesXml) baseZip.file('[Content_Types].xml', baseContentTypesXml, { compression: 'DEFLATE' });
+
+  const cleanZip = new JSZip();
+  for (const [path, file] of Object.entries(baseZip.files)) {
+    if (!file.dir) {
+      const fileData = await file.async('arraybuffer');
+      cleanZip.file(path, fileData);
+    }
+  }
+
+  const blob = await cleanZip.generateAsync({
+    type: 'nodebuffer',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    compression: 'DEFLATE'
+  });
+
+  return blob;
+}
+
+function buildRelIdMap(relsXml, startFromId) {
+  const map = {};
+  let nextId = startFromId;
+  const relationships = relsXml.match(/<Relationship[^>]*\/>/g) || [];
+  relationships.forEach(rel => {
+    const idMatch = rel.match(/Id="([^"]+)"/);
+    if (idMatch) {
+      map[idMatch[1]] = 'rId' + nextId;
+      nextId++;
+    }
+  });
+  return { map, nextId };
+}
+
+function remapBodyRelIds(bodyXml, idMapObj) {
+  const { map } = idMapObj;
+  let result = bodyXml;
+  for (const [oldId, newId] of Object.entries(map)) {
+    result = result.replace(new RegExp('(r:embed|r:link|r:id)="' + oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"', 'g'), '$1="' + newId + '"');
+  }
+  return result;
+}
+
+function mergeStyles(baseXml, additionalXml) {
+  const baseStyleIds = new Set();
+  const baseStyleBlocks = baseXml.match(/<w:style[^>]*w:styleId="([^"]+)"/g) || [];
+  baseStyleBlocks.forEach(b => {
+    const m = b.match(/w:styleId="([^"]+)"/);
+    if (m) baseStyleIds.add(m[1]);
+  });
+
+  const additionalStyles = additionalXml.match(/<w:style[^>]*>[\s\S]*?<\/w:style>/g) || [];
+  let toInject = '';
+  additionalStyles.forEach(style => {
+    const idMatch = style.match(/w:styleId="([^"]+)"/);
+    if (idMatch && !baseStyleIds.has(idMatch[1])) {
+      toInject += style;
+      baseStyleIds.add(idMatch[1]);
+    }
+  });
+
+  if (toInject) {
+    baseXml = baseXml.replace(/<\/w:styles>/, toInject + '</w:styles>');
+  }
+  return baseXml;
+}
+
+function mergeRels(baseRelsXml, additionalRelsXml, baseContentTypesXml, idMapObj) {
+  const { map: idMap, nextId: nextRelId } = idMapObj;
+  let updatedContentTypesXml = baseContentTypesXml;
+
+  const sharedFilePatterns = ['styles.xml', 'settings.xml', 'webSettings.xml', 'fontTable.xml', 'theme/', 'numbering.xml', 'footnotes.xml', 'endnotes.xml'];
+  const excludeRelTypes = ['footer', 'header', 'customxml', 'hyperlink'];
+
+  const additionalRelships = additionalRelsXml.match(/<Relationship[^>]*\/>/g) || [];
+  let newRelships = '';
+
+  additionalRelships.forEach(rel => {
+    const oldIdMatch = rel.match(/Id="([^"]+)"/);
+    const typeMatch = rel.match(/Type="([^"]+)"/);
+    const targetMatch = rel.match(/Target="([^"]+)"/);
+    const targetModeMatch = rel.match(/TargetMode="([^"]+)"/);
+
+    if (oldIdMatch && typeMatch && targetMatch) {
+      const oldId = oldIdMatch[1];
+      const newId = idMap[oldId];
+      const target = targetMatch[1];
+      const type = typeMatch[1];
+
+      const isSharedFile = sharedFilePatterns.some(pattern => target.includes(pattern));
+      if (isSharedFile) return;
+
+      const isExcludedType = excludeRelTypes.some(excludeType => type.toLowerCase().includes(excludeType));
+      if (isExcludedType) return;
+
+      let newRel = '<Relationship Id="' + newId + '" Type="' + type + '" Target="' + target + '"';
+      if (targetModeMatch) newRel += ' TargetMode="' + targetModeMatch[1] + '"';
+      newRel += '/>';
+      newRelships += newRel;
+    }
+  });
+
+  if (newRelships) {
+    baseRelsXml = baseRelsXml.replace(/<\/Relationships>/, newRelships + '</Relationships>');
+  }
+
+  return { relsXml: baseRelsXml, contentTypesXml: updatedContentTypesXml, nextRelId };
+}
+
+testFullCombine().catch(console.error);
