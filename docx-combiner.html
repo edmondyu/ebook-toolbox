@@ -304,6 +304,10 @@
       let baseRelsXml = baseZip.file('word/_rels/document.xml.rels') ? await baseZip.file('word/_rels/document.xml.rels').async('string') : '';
       let baseContentTypesXml = baseZip.file('[Content_Types].xml') ? await baseZip.file('[Content_Types].xml').async('string') : '';
 
+      // Footnote/endnote merge state
+      const footnoteState = { mergedXml: '', maxId: 0 };
+      const endnoteState = { mergedXml: '', maxId: 0 };
+
       // Extract the body content from base document
       const bodyMatch = baseDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
       if (!bodyMatch) throw new Error('Invalid DOCX: missing document body in first file.');
@@ -319,9 +323,13 @@
       // Use global flag 'g' to remove ALL sectPr, not just the first one
       let combinedBodyContent = bodyMatch[1]
         .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '')
-        .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '')
-        .replace(/<w:footnoteReference[^/]*\/>/g, '')
-        .replace(/<w:endnoteReference[^/]*\/>/g, '');
+        .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '');
+
+      // Merge base's footnotes/endnotes and remap any references in base body
+      const baseFootnotesXml = baseZip.file('word/footnotes.xml') ? await baseZip.file('word/footnotes.xml').async('string') : '';
+      combinedBodyContent = mergeNotesInto(footnoteState, baseFootnotesXml, combinedBodyContent, 'footnoteReference');
+      const baseEndnotesXml = baseZip.file('word/endnotes.xml') ? await baseZip.file('word/endnotes.xml').async('string') : '';
+      combinedBodyContent = mergeNotesInto(endnoteState, baseEndnotesXml, combinedBodyContent, 'endnoteReference');
 
       // Track maximum relationship ID
       let maxRelId = 1;
@@ -347,9 +355,13 @@
         // Use global flag 'g' to remove ALL sectPr, not just the first one
         let additionalBody = additionalBodyMatch[1]
           .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '')
-          .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '')
-          .replace(/<w:footnoteReference[^/]*\/>/g, '')
-          .replace(/<w:endnoteReference[^/]*\/>/g, '');
+          .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '');
+
+        // Merge this file's footnotes/endnotes and remap its body's references
+        const addFootnotesXml = additionalZip.file('word/footnotes.xml') ? await additionalZip.file('word/footnotes.xml').async('string') : '';
+        additionalBody = mergeNotesInto(footnoteState, addFootnotesXml, additionalBody, 'footnoteReference');
+        const addEndnotesXml = additionalZip.file('word/endnotes.xml') ? await additionalZip.file('word/endnotes.xml').async('string') : '';
+        additionalBody = mergeNotesInto(endnoteState, addEndnotesXml, additionalBody, 'endnoteReference');
 
         // Build relationship ID map for this document
         const idMap = buildRelIdMap(additionalRelsXml, maxRelId);
@@ -389,6 +401,36 @@
         baseZip.file('word/_rels/document.xml.rels', baseRelsXml, { compression: 'DEFLATE' });
       }
 
+      // Write merged footnotes/endnotes and ensure relationship + content type
+      if (footnoteState.mergedXml) {
+        baseZip.file('word/footnotes.xml', footnoteState.mergedXml, { compression: 'DEFLATE' });
+        if (!/Target="footnotes\.xml"/.test(baseRelsXml)) {
+          const newId = 'rId' + maxRelId++;
+          baseRelsXml = baseRelsXml.replace(/<\/Relationships>/,
+            '<Relationship Id="' + newId + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes" Target="footnotes.xml"/></Relationships>');
+        }
+        if (!baseContentTypesXml.includes('/word/footnotes.xml')) {
+          baseContentTypesXml = baseContentTypesXml.replace(/<\/Types>/,
+            '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>');
+        }
+      }
+      if (endnoteState.mergedXml) {
+        baseZip.file('word/endnotes.xml', endnoteState.mergedXml, { compression: 'DEFLATE' });
+        if (!/Target="endnotes\.xml"/.test(baseRelsXml)) {
+          const newId = 'rId' + maxRelId++;
+          baseRelsXml = baseRelsXml.replace(/<\/Relationships>/,
+            '<Relationship Id="' + newId + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes" Target="endnotes.xml"/></Relationships>');
+        }
+        if (!baseContentTypesXml.includes('/word/endnotes.xml')) {
+          baseContentTypesXml = baseContentTypesXml.replace(/<\/Types>/,
+            '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/></Types>');
+        }
+      }
+      // Re-write rels (may have been updated above)
+      if (baseRelsXml) {
+        baseZip.file('word/_rels/document.xml.rels', baseRelsXml, { compression: 'DEFLATE' });
+      }
+
       // Update content types
       if (baseContentTypesXml) {
         baseZip.file('[Content_Types].xml', baseContentTypesXml, { compression: 'DEFLATE' });
@@ -413,6 +455,54 @@
       });
 
       return blob;
+    }
+
+    // Merges a source file's footnotes.xml/endnotes.xml into the running state and
+    // remaps the corresponding references in that file's body. The first file with
+    // notes seeds the merged XML (preserving namespaces and special id ≤ 0 entries);
+    // subsequent files have their id ≥ 1 entries renumbered to continue after the max.
+    function mergeNotesInto(state, fileNotesXml, bodyXml, refTag) {
+      if (!fileNotesXml) return bodyXml;
+      const blocks = fileNotesXml.match(/<w:footnote\b[\s\S]*?<\/w:footnote>|<w:endnote\b[\s\S]*?<\/w:endnote>/g) || [];
+      if (blocks.length === 0) return bodyXml;
+
+      if (!state.mergedXml) {
+        // Seed with this file's full XML (preserves namespace declarations and separators)
+        state.mergedXml = fileNotesXml;
+        blocks.forEach(b => {
+          const m = b.match(/w:id="(-?\d+)"/);
+          if (m) {
+            const id = parseInt(m[1], 10);
+            if (id > state.maxId) state.maxId = id;
+          }
+        });
+        return bodyXml; // no remap needed
+      }
+
+      // Remap entries with id >= 1; skip separator entries (id <= 0) since seed already has them
+      const idMap = {};
+      let toAppend = '';
+      blocks.forEach(b => {
+        const m = b.match(/w:id="(-?\d+)"/);
+        if (!m) return;
+        const oldId = parseInt(m[1], 10);
+        if (oldId <= 0) return;
+        state.maxId++;
+        idMap[oldId] = state.maxId;
+        toAppend += b.replace(/w:id="-?\d+"/, 'w:id="' + state.maxId + '"');
+      });
+      if (toAppend) {
+        state.mergedXml = state.mergedXml.replace(/<\/w:footnotes>|<\/w:endnotes>/, m => toAppend + m);
+      }
+
+      // Remap refs in body
+      return bodyXml.replace(new RegExp('<w:' + refTag + '\\b([^/>]*)/>', 'g'), (match, attrs) => {
+        const idMatch = attrs.match(/w:id="(\d+)"/);
+        if (!idMatch) return match;
+        const newId = idMap[parseInt(idMatch[1], 10)];
+        if (newId === undefined) return match;
+        return '<w:' + refTag + attrs.replace(/w:id="\d+"/, 'w:id="' + newId + '"') + '/>';
+      });
     }
 
     function buildRelIdMap(relsXml, startFromId) {

@@ -144,6 +144,13 @@ async function combineDocxFiles(files) {
     .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '')
     .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '');
 
+  const footnoteState = { mergedXml: '', maxId: 0 };
+  const endnoteState = { mergedXml: '', maxId: 0 };
+  const baseFootnotesXml = baseZip.file('word/footnotes.xml') ? await baseZip.file('word/footnotes.xml').async('string') : '';
+  combinedBodyContent = mergeNotesInto(footnoteState, baseFootnotesXml, combinedBodyContent, 'footnoteReference');
+  const baseEndnotesXml = baseZip.file('word/endnotes.xml') ? await baseZip.file('word/endnotes.xml').async('string') : '';
+  combinedBodyContent = mergeNotesInto(endnoteState, baseEndnotesXml, combinedBodyContent, 'endnoteReference');
+
   let maxRelId = 1;
   const relIdMatch = baseRelsXml.match(/Id="rId(\d+)"/g);
   if (relIdMatch) {
@@ -163,6 +170,11 @@ async function combineDocxFiles(files) {
     let additionalBody = additionalBodyMatch[1]
       .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '')
       .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '');
+
+    const addFootnotesXml = additionalZip.file('word/footnotes.xml') ? await additionalZip.file('word/footnotes.xml').async('string') : '';
+    additionalBody = mergeNotesInto(footnoteState, addFootnotesXml, additionalBody, 'footnoteReference');
+    const addEndnotesXml = additionalZip.file('word/endnotes.xml') ? await additionalZip.file('word/endnotes.xml').async('string') : '';
+    additionalBody = mergeNotesInto(endnoteState, addEndnotesXml, additionalBody, 'endnoteReference');
 
     const idMapObj = buildRelIdMap(additionalRelsXml, maxRelId);
     const remappedBody = remapBodyRelIds(additionalBody, idMapObj);
@@ -187,6 +199,31 @@ async function combineDocxFiles(files) {
   const finalDocXml = baseDocXml.replace(/<w:body>[\s\S]*<\/w:body>/, '<w:body>' + finalBodyContent + '</w:body>');
   baseZip.file('word/document.xml', finalDocXml, { compression: 'DEFLATE' });
 
+  if (footnoteState.mergedXml) {
+    baseZip.file('word/footnotes.xml', footnoteState.mergedXml, { compression: 'DEFLATE' });
+    if (!/Target="footnotes\.xml"/.test(baseRelsXml)) {
+      const newId = 'rId' + maxRelId++;
+      baseRelsXml = baseRelsXml.replace(/<\/Relationships>/,
+        '<Relationship Id="' + newId + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes" Target="footnotes.xml"/></Relationships>');
+    }
+    if (!baseContentTypesXml.includes('/word/footnotes.xml')) {
+      baseContentTypesXml = baseContentTypesXml.replace(/<\/Types>/,
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>');
+    }
+  }
+  if (endnoteState.mergedXml) {
+    baseZip.file('word/endnotes.xml', endnoteState.mergedXml, { compression: 'DEFLATE' });
+    if (!/Target="endnotes\.xml"/.test(baseRelsXml)) {
+      const newId = 'rId' + maxRelId++;
+      baseRelsXml = baseRelsXml.replace(/<\/Relationships>/,
+        '<Relationship Id="' + newId + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes" Target="endnotes.xml"/></Relationships>');
+    }
+    if (!baseContentTypesXml.includes('/word/endnotes.xml')) {
+      baseContentTypesXml = baseContentTypesXml.replace(/<\/Types>/,
+        '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/></Types>');
+    }
+  }
+
   if (baseStylesXml) baseZip.file('word/styles.xml', baseStylesXml, { compression: 'DEFLATE' });
   if (baseRelsXml) baseZip.file('word/_rels/document.xml.rels', baseRelsXml, { compression: 'DEFLATE' });
   if (baseContentTypesXml) baseZip.file('[Content_Types].xml', baseContentTypesXml, { compression: 'DEFLATE' });
@@ -206,6 +243,44 @@ async function combineDocxFiles(files) {
   });
 
   return blob;
+}
+
+function mergeNotesInto(state, fileNotesXml, bodyXml, refTag) {
+  if (!fileNotesXml) return bodyXml;
+  const blocks = fileNotesXml.match(/<w:footnote\b[\s\S]*?<\/w:footnote>|<w:endnote\b[\s\S]*?<\/w:endnote>/g) || [];
+  if (blocks.length === 0) return bodyXml;
+  if (!state.mergedXml) {
+    state.mergedXml = fileNotesXml;
+    blocks.forEach(b => {
+      const m = b.match(/w:id="(-?\d+)"/);
+      if (m) {
+        const id = parseInt(m[1], 10);
+        if (id > state.maxId) state.maxId = id;
+      }
+    });
+    return bodyXml;
+  }
+  const idMap = {};
+  let toAppend = '';
+  blocks.forEach(b => {
+    const m = b.match(/w:id="(-?\d+)"/);
+    if (!m) return;
+    const oldId = parseInt(m[1], 10);
+    if (oldId <= 0) return;
+    state.maxId++;
+    idMap[oldId] = state.maxId;
+    toAppend += b.replace(/w:id="-?\d+"/, 'w:id="' + state.maxId + '"');
+  });
+  if (toAppend) {
+    state.mergedXml = state.mergedXml.replace(/<\/w:footnotes>|<\/w:endnotes>/, m => toAppend + m);
+  }
+  return bodyXml.replace(new RegExp('<w:' + refTag + '\\b([^/>]*)/>', 'g'), (match, attrs) => {
+    const idMatch = attrs.match(/w:id="(\d+)"/);
+    if (!idMatch) return match;
+    const newId = idMap[parseInt(idMatch[1], 10)];
+    if (newId === undefined) return match;
+    return '<w:' + refTag + attrs.replace(/w:id="\d+"/, 'w:id="' + newId + '"') + '/>';
+  });
 }
 
 function buildRelIdMap(relsXml, startFromId) {
