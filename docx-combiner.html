@@ -304,6 +304,10 @@
       let baseRelsXml = baseZip.file('word/_rels/document.xml.rels') ? await baseZip.file('word/_rels/document.xml.rels').async('string') : '';
       let baseContentTypesXml = baseZip.file('[Content_Types].xml') ? await baseZip.file('[Content_Types].xml').async('string') : '';
 
+      // Strip document-specific relationships (header/footer/customXml/hyperlink) from base
+      // and drop any whose Target file doesn't exist in the base zip (e.g. ../customXml/item1.xml)
+      baseRelsXml = filterBaseRels(baseRelsXml, baseZip);
+
       // Footnote/endnote/numbering merge state
       const footnoteState = { mergedXml: '', maxId: 0 };
       const endnoteState = { mergedXml: '', maxId: 0 };
@@ -313,16 +317,24 @@
       const bodyMatch = baseDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
       if (!bodyMatch) throw new Error('Invalid DOCX: missing document body in first file.');
 
+      // Strip <w:sectPrChange> (contains a nested <w:sectPr> from revision tracking)
+      // BEFORE matching sectPr, otherwise the lazy regex matches the outer open against
+      // the inner close and leaves a dangling </w:sectPr>.
+      const baseBodyRaw = bodyMatch[1].replace(/<w:sectPrChange[\s\S]*?<\/w:sectPrChange>/g, '');
+
       // Extract and save the section properties from base document (to use at the end)
       let baseSectPr = '';
-      const sectPrMatch = bodyMatch[1].match(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/);
+      const sectPrMatch = baseBodyRaw.match(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/);
       if (sectPrMatch) {
-        baseSectPr = sectPrMatch[0];
+        // Drop header/footer references since those rels are filtered out
+        baseSectPr = sectPrMatch[0]
+          .replace(/<w:headerReference[^/]*\/>/g, '')
+          .replace(/<w:footerReference[^/]*\/>/g, '');
       }
 
       // Remove section properties from base document body (will add back at the end)
       // Use global flag 'g' to remove ALL sectPr, not just the first one
-      let combinedBodyContent = bodyMatch[1]
+      let combinedBodyContent = baseBodyRaw
         .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
 
       // Merge base's footnotes/endnotes/numbering and remap any references in base body
@@ -356,7 +368,8 @@
         // Remove section properties from additional document (only the base document's will be used at the end)
         // Use global flag 'g' to remove ALL sectPr, not just the first one
         let additionalBody = additionalBodyMatch[1]
-          .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
+          .replace(/<w:sectPrChange[\s\S]*?<\/w:sectPrChange>/g, '')
+        .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
 
         // Merge this file's footnotes/endnotes/numbering and remap its body's references
         const addFootnotesXml = additionalZip.file('word/footnotes.xml') ? await additionalZip.file('word/footnotes.xml').async('string') : '';
@@ -520,6 +533,29 @@
       });
     }
 
+    function filterBaseRels(relsXml, baseZip) {
+      const excludeRelTypes = ['footer', 'header', 'customxml', 'hyperlink'];
+      return relsXml.replace(/<Relationship[^>]*\/>/g, (rel) => {
+        const typeMatch = rel.match(/Type="([^"]+)"/);
+        const targetMatch = rel.match(/Target="([^"]+)"/);
+        const targetModeMatch = rel.match(/TargetMode="([^"]+)"/);
+        if (!typeMatch || !targetMatch) return rel;
+        const type = typeMatch[1].toLowerCase();
+        if (excludeRelTypes.some(t => type.includes(t))) return '';
+        // External targets (TargetMode="External") are fine — skip existence check
+        if (targetModeMatch && targetModeMatch[1] === 'External') return rel;
+        // Verify target resolves to a file in the zip
+        const target = targetMatch[1];
+        const candidates = [
+          'word/' + target,
+          target.replace(/^\.\.\//, ''),
+          target
+        ];
+        const exists = candidates.some(p => baseZip.file(p));
+        return exists ? rel : '';
+      });
+    }
+
     // Merges a source file's numbering.xml into the running state and remaps
     // <w:numId w:val="..."/> references in that file's body. Both abstractNumId
     // and numId values from subsequent files are renumbered to avoid collisions.
@@ -657,7 +693,8 @@
         'theme/',
         'numbering.xml',
         'footnotes.xml',
-        'endnotes.xml'
+        'endnotes.xml',
+        'people.xml'
       ];
 
       // Document-specific relationships that shouldn't be merged
@@ -665,8 +702,7 @@
       const excludeRelTypes = [
         'footer',
         'header',
-        'customxml',  // Note: converted to lowercase for comparison
-        'hyperlink'  // hyperlinks may reference external URLs specific to each doc
+        'customxml'  // Note: converted to lowercase for comparison
       ];
 
       const additionalRelships = additionalRelsXml.match(/<Relationship[^>]*\/>/g) || [];

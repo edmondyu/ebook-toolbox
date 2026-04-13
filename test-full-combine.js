@@ -131,16 +131,22 @@ async function combineDocxFiles(files) {
   let baseRelsXml = baseZip.file('word/_rels/document.xml.rels') ? await baseZip.file('word/_rels/document.xml.rels').async('string') : '';
   let baseContentTypesXml = baseZip.file('[Content_Types].xml') ? await baseZip.file('[Content_Types].xml').async('string') : '';
 
+  baseRelsXml = filterBaseRels(baseRelsXml, baseZip);
+
   const bodyMatch = baseDocXml.match(/<w:body>([\s\S]*)<\/w:body>/);
   if (!bodyMatch) throw new Error('Invalid DOCX: missing document body in first file.');
 
+  const baseBodyRaw = bodyMatch[1].replace(/<w:sectPrChange[\s\S]*?<\/w:sectPrChange>/g, '');
+
   let baseSectPr = '';
-  const sectPrMatch = bodyMatch[1].match(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/);
+  const sectPrMatch = baseBodyRaw.match(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/);
   if (sectPrMatch) {
-    baseSectPr = sectPrMatch[0];
+    baseSectPr = sectPrMatch[0]
+      .replace(/<w:headerReference[^/]*\/>/g, '')
+      .replace(/<w:footerReference[^/]*\/>/g, '');
   }
 
-  let combinedBodyContent = bodyMatch[1]
+  let combinedBodyContent = baseBodyRaw
     .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
 
   const footnoteState = { mergedXml: '', maxId: 0 };
@@ -170,7 +176,8 @@ async function combineDocxFiles(files) {
     if (!additionalBodyMatch) continue;
 
     let additionalBody = additionalBodyMatch[1]
-      .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
+      .replace(/<w:sectPrChange[\s\S]*?<\/w:sectPrChange>/g, '')
+    .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
 
     const addFootnotesXml = additionalZip.file('word/footnotes.xml') ? await additionalZip.file('word/footnotes.xml').async('string') : '';
     additionalBody = mergeNotesInto(footnoteState, addFootnotesXml, additionalBody, 'footnoteReference');
@@ -298,6 +305,23 @@ function mergeNotesInto(state, fileNotesXml, bodyXml, refTag) {
   });
 }
 
+function filterBaseRels(relsXml, baseZip) {
+  const excludeRelTypes = ['footer', 'header', 'customxml'];
+  return relsXml.replace(/<Relationship[^>]*\/>/g, (rel) => {
+    const typeMatch = rel.match(/Type="([^"]+)"/);
+    const targetMatch = rel.match(/Target="([^"]+)"/);
+    const targetModeMatch = rel.match(/TargetMode="([^"]+)"/);
+    if (!typeMatch || !targetMatch) return rel;
+    const type = typeMatch[1].toLowerCase();
+    if (excludeRelTypes.some(t => type.includes(t))) return '';
+    if (targetModeMatch && targetModeMatch[1] === 'External') return rel;
+    const target = targetMatch[1];
+    const candidates = ['word/' + target, target.replace(/^\.\.\//, ''), target];
+    const exists = candidates.some(p => baseZip.file(p));
+    return exists ? rel : '';
+  });
+}
+
 function mergeNumberingInto(state, fileXml, bodyXml) {
   if (!fileXml) return bodyXml;
   const getAbstracts = xml => xml.match(/<w:abstractNum w:abstractNumId="\d+"[\s\S]*?<\/w:abstractNum>/g) || [];
@@ -404,8 +428,8 @@ function mergeRels(baseRelsXml, additionalRelsXml, baseContentTypesXml, idMapObj
   const { map: idMap, nextId: nextRelId } = idMapObj;
   let updatedContentTypesXml = baseContentTypesXml;
 
-  const sharedFilePatterns = ['styles.xml', 'settings.xml', 'webSettings.xml', 'fontTable.xml', 'theme/', 'numbering.xml', 'footnotes.xml', 'endnotes.xml'];
-  const excludeRelTypes = ['footer', 'header', 'customxml', 'hyperlink'];
+  const sharedFilePatterns = ['styles.xml', 'settings.xml', 'webSettings.xml', 'fontTable.xml', 'theme/', 'numbering.xml', 'footnotes.xml', 'endnotes.xml', 'people.xml'];
+  const excludeRelTypes = ['footer', 'header', 'customxml'];
 
   const additionalRelships = additionalRelsXml.match(/<Relationship[^>]*\/>/g) || [];
   let newRelships = '';
