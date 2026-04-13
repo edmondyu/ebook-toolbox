@@ -316,7 +316,8 @@
       }
 
       // Remove section properties from base document body (will add back at the end)
-      let combinedBodyContent = bodyMatch[1].replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/, '');
+      // Use global flag 'g' to remove ALL sectPr, not just the first one
+      let combinedBodyContent = bodyMatch[1].replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
 
       // Track maximum relationship ID
       let maxRelId = 1;
@@ -339,7 +340,8 @@
         if (!additionalBodyMatch) continue;
 
         // Remove section properties from additional document (only the base document's will be used at the end)
-        let additionalBody = additionalBodyMatch[1].replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/, '');
+        // Use global flag 'g' to remove ALL sectPr, not just the first one
+        let additionalBody = additionalBodyMatch[1].replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
 
         // Build relationship ID map for this document
         const idMap = buildRelIdMap(additionalRelsXml, maxRelId);
