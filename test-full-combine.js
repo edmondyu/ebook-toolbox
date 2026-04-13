@@ -141,15 +141,17 @@ async function combineDocxFiles(files) {
   }
 
   let combinedBodyContent = bodyMatch[1]
-    .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '')
-    .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '');
+    .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
 
   const footnoteState = { mergedXml: '', maxId: 0 };
   const endnoteState = { mergedXml: '', maxId: 0 };
+  const numberingState = { mergedXml: '', maxAbsId: -1, maxNumId: 0 };
   const baseFootnotesXml = baseZip.file('word/footnotes.xml') ? await baseZip.file('word/footnotes.xml').async('string') : '';
   combinedBodyContent = mergeNotesInto(footnoteState, baseFootnotesXml, combinedBodyContent, 'footnoteReference');
   const baseEndnotesXml = baseZip.file('word/endnotes.xml') ? await baseZip.file('word/endnotes.xml').async('string') : '';
   combinedBodyContent = mergeNotesInto(endnoteState, baseEndnotesXml, combinedBodyContent, 'endnoteReference');
+  const baseNumberingXml = baseZip.file('word/numbering.xml') ? await baseZip.file('word/numbering.xml').async('string') : '';
+  combinedBodyContent = mergeNumberingInto(numberingState, baseNumberingXml, combinedBodyContent);
 
   let maxRelId = 1;
   const relIdMatch = baseRelsXml.match(/Id="rId(\d+)"/g);
@@ -168,13 +170,14 @@ async function combineDocxFiles(files) {
     if (!additionalBodyMatch) continue;
 
     let additionalBody = additionalBodyMatch[1]
-      .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '')
-      .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '');
+      .replace(/<w:sectPr[^>]*>[\s\S]*?<\/w:sectPr>/g, '');
 
     const addFootnotesXml = additionalZip.file('word/footnotes.xml') ? await additionalZip.file('word/footnotes.xml').async('string') : '';
     additionalBody = mergeNotesInto(footnoteState, addFootnotesXml, additionalBody, 'footnoteReference');
     const addEndnotesXml = additionalZip.file('word/endnotes.xml') ? await additionalZip.file('word/endnotes.xml').async('string') : '';
     additionalBody = mergeNotesInto(endnoteState, addEndnotesXml, additionalBody, 'endnoteReference');
+    const addNumberingXml = additionalZip.file('word/numbering.xml') ? await additionalZip.file('word/numbering.xml').async('string') : '';
+    additionalBody = mergeNumberingInto(numberingState, addNumberingXml, additionalBody);
 
     const idMapObj = buildRelIdMap(additionalRelsXml, maxRelId);
     const remappedBody = remapBodyRelIds(additionalBody, idMapObj);
@@ -209,6 +212,18 @@ async function combineDocxFiles(files) {
     if (!baseContentTypesXml.includes('/word/footnotes.xml')) {
       baseContentTypesXml = baseContentTypesXml.replace(/<\/Types>/,
         '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>');
+    }
+  }
+  if (numberingState.mergedXml) {
+    baseZip.file('word/numbering.xml', numberingState.mergedXml, { compression: 'DEFLATE' });
+    if (!/Target="numbering\.xml"/.test(baseRelsXml)) {
+      const newId = 'rId' + maxRelId++;
+      baseRelsXml = baseRelsXml.replace(/<\/Relationships>/,
+        '<Relationship Id="' + newId + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>');
+    }
+    if (!baseContentTypesXml.includes('/word/numbering.xml')) {
+      baseContentTypesXml = baseContentTypesXml.replace(/<\/Types>/,
+        '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>');
     }
   }
   if (endnoteState.mergedXml) {
@@ -280,6 +295,61 @@ function mergeNotesInto(state, fileNotesXml, bodyXml, refTag) {
     const newId = idMap[parseInt(idMatch[1], 10)];
     if (newId === undefined) return match;
     return '<w:' + refTag + attrs.replace(/w:id="\d+"/, 'w:id="' + newId + '"') + '/>';
+  });
+}
+
+function mergeNumberingInto(state, fileXml, bodyXml) {
+  if (!fileXml) return bodyXml;
+  const getAbstracts = xml => xml.match(/<w:abstractNum w:abstractNumId="\d+"[\s\S]*?<\/w:abstractNum>/g) || [];
+  const getNums = xml => xml.match(/<w:num w:numId="\d+"[\s\S]*?<\/w:num>/g) || [];
+  if (!state.mergedXml) {
+    state.mergedXml = fileXml;
+    getAbstracts(fileXml).forEach(b => {
+      const m = b.match(/w:abstractNumId="(\d+)"/);
+      if (m) state.maxAbsId = Math.max(state.maxAbsId, parseInt(m[1], 10));
+    });
+    getNums(fileXml).forEach(b => {
+      const m = b.match(/<w:num w:numId="(\d+)"/);
+      if (m) state.maxNumId = Math.max(state.maxNumId, parseInt(m[1], 10));
+    });
+    return bodyXml;
+  }
+  const absMap = {};
+  let newAbsBlocks = '';
+  getAbstracts(fileXml).forEach(b => {
+    const m = b.match(/w:abstractNumId="(\d+)"/);
+    if (!m) return;
+    state.maxAbsId++;
+    absMap[parseInt(m[1], 10)] = state.maxAbsId;
+    newAbsBlocks += b.replace(/w:abstractNumId="\d+"/, 'w:abstractNumId="' + state.maxAbsId + '"');
+  });
+  const numMap = {};
+  let newNumBlocks = '';
+  getNums(fileXml).forEach(b => {
+    const m = b.match(/<w:num w:numId="(\d+)"/);
+    if (!m) return;
+    state.maxNumId++;
+    numMap[parseInt(m[1], 10)] = state.maxNumId;
+    let remapped = b.replace(/<w:num w:numId="\d+"/, '<w:num w:numId="' + state.maxNumId + '"');
+    remapped = remapped.replace(/<w:abstractNumId w:val="(\d+)"/g, (mm, old) => {
+      const n = absMap[parseInt(old, 10)];
+      return n !== undefined ? '<w:abstractNumId w:val="' + n + '"' : mm;
+    });
+    newNumBlocks += remapped;
+  });
+  if (newAbsBlocks) {
+    if (/<w:num w:numId=/.test(state.mergedXml)) {
+      state.mergedXml = state.mergedXml.replace(/<w:num w:numId=/, newAbsBlocks + '<w:num w:numId=');
+    } else {
+      state.mergedXml = state.mergedXml.replace(/<\/w:numbering>/, newAbsBlocks + '</w:numbering>');
+    }
+  }
+  if (newNumBlocks) {
+    state.mergedXml = state.mergedXml.replace(/<\/w:numbering>/, newNumBlocks + '</w:numbering>');
+  }
+  return bodyXml.replace(/<w:numId w:val="(\d+)"\s*\/>/g, (match, old) => {
+    const n = numMap[parseInt(old, 10)];
+    return n !== undefined ? '<w:numId w:val="' + n + '"/>' : match;
   });
 }
 
