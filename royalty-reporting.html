@@ -440,7 +440,8 @@
           const row = normalizeKeys(raw);
           const name = safeString(row['name'], '');
           const publisher = safeString(row['publisher'], '');
-          if (name && publisher) map.set(name, publisher);
+          const key = normalizeForMatch(name);
+          if (key && publisher) map.set(key, publisher);
         }
         titleToPublisher = map;
         mappingDropZone.classList.add('has-file');
@@ -499,6 +500,15 @@
         }
       }
       return out;
+    }
+
+    function normalizeForMatch(s) {
+      if (s == null) return '';
+      let out = String(s).replace(/[！-～]/g, ch =>
+        String.fromCharCode(ch.charCodeAt(0) - 0xfee0)
+      );
+      out = out.replace(/\s+/g, '');
+      return out.toLowerCase();
     }
 
     function safeString(x, fallback) {
@@ -615,9 +625,11 @@
         : null;
       function lookupPublisher(title) {
         if (lookupCache.has(title)) return lookupCache.get(title);
+        const t = normalizeForMatch(title);
         let result = null;
         for (const [name, pub] of mappingEntries) {
-          if (title.includes(name)) { result = pub; break; }
+          if (name.length < 2 && name !== t) continue;
+          if (t.includes(name)) { result = pub; break; }
         }
         lookupCache.set(title, result);
         return result;
