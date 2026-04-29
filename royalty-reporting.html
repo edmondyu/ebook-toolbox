@@ -338,6 +338,7 @@
     let lastSummaryBlobUrl = null;
     let titleToPublisher = null;
     const aliasMap = new Map();
+    const aliasCanonicalDisplay = new Map();
     let aliasLoadPromise = null;
 
     function canonicalize(normalized) {
@@ -682,7 +683,10 @@
 
           const copies = deriveCopies(platform, row);
 
-          allRows.push({ title, publisher, royalty, copies, platform });
+          const titleKey = canonicalize(normalizeForMatch(title));
+          const titleDisplay = aliasCanonicalDisplay.get(titleKey) || title;
+
+          allRows.push({ title: titleDisplay, titleKey, publisher, royalty, copies, platform });
         }
       }
 
@@ -711,13 +715,15 @@
 
         const byTitle = new Map();
         for (const r of rows) {
-          const t = safeString(r.title, '(Missing title)');
-          if (!byTitle.has(t)) byTitle.set(t, []);
-          byTitle.get(t).push(r);
+          const k = r.titleKey || normalizeForMatch(r.title) || '(missing)';
+          if (!byTitle.has(k)) byTitle.set(k, { display: safeString(r.title, '(Missing title)'), rows: [] });
+          byTitle.get(k).rows.push(r);
         }
 
         const table = [];
-        for (const [title, tRows] of byTitle.entries()) {
+        for (const [, group] of byTitle.entries()) {
+          const title = group.display;
+          const tRows = group.rows;
           const soldCopies = Math.round(tRows.reduce((acc, x) => acc + (x.copies || 0), 0));
 
           const rowOut = { Title: title, Sold_Copies: soldCopies };
@@ -879,7 +885,9 @@
           if (!canonical || !alias) continue;
           const k = normalizeForMatch(alias);
           const v = normalizeForMatch(canonical);
-          if (k && v && k !== v) { aliasMap.set(k, v); count++; }
+          if (!k || !v) continue;
+          if (k !== v) { aliasMap.set(k, v); count++; }
+          if (!aliasCanonicalDisplay.has(v)) aliasCanonicalDisplay.set(v, canonical);
         }
         log(`Loaded ${count} title alias entr${count === 1 ? 'y' : 'ies'} from title-aliases.csv`);
       } catch (err) {
