@@ -163,6 +163,68 @@
       font-size: 0.9rem;
       line-height: 1.5;
     }
+    details.guide {
+      margin-top: 1.25rem;
+    }
+    details.guide > summary {
+      cursor: pointer;
+      list-style: none;
+      font-weight: 600;
+      color: #50e3c2;
+      font-size: 1.05rem;
+    }
+    details.guide > summary::before {
+      content: "▶";
+      display: inline-block;
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+    }
+    details.guide[open] > summary::before {
+      transform: rotate(90deg);
+    }
+    details.guide h3 {
+      color: #50e3c2;
+      font-size: 0.98rem;
+      margin: 1.1rem 0 0.4rem;
+    }
+    details.guide p, details.guide li {
+      font-size: 0.9rem;
+      color: #d1d5db;
+      line-height: 1.55;
+    }
+    details.guide table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin: 0.5rem 0;
+    }
+    details.guide th, details.guide td {
+      padding: 0.45rem 0.6rem;
+      border: 1px solid #3a3a3a;
+      text-align: left;
+      vertical-align: top;
+    }
+    details.guide th {
+      background: #2a2a2a;
+      color: #50e3c2;
+      font-weight: 600;
+    }
+    details.guide td {
+      color: #d1d5db;
+    }
+    details.guide ul {
+      margin: 0.4rem 0 0.4rem 1.2rem;
+      padding: 0;
+    }
+    details.guide pre {
+      background: #0a0a0a;
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      color: #dbeafe;
+      font-size: 0.82rem;
+      height: auto;
+      box-shadow: inset 0 0 0 1px rgba(80,227,194,0.1);
+    }
     .drop-zone {
       position: relative;
       border: 2px dashed #3a3a3a;
@@ -305,6 +367,107 @@
       </div>
     </div>
   </div>
+
+  <details class="card guide">
+    <summary>How to prepare your files</summary>
+
+    <h3>1. Platform reports (required)</h3>
+    <p>
+      Drop one or more files into the <strong>report drop zone</strong>. The filename must contain the platform marker shown so the
+      tool can detect the platform. You can drop several months at once (e.g. three monthly Kobo zips); they're all consolidated in one run.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Platform</th><th>Format</th><th>Filename must contain</th><th>Where to download</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Google</td>
+          <td><span class="kbd">.xlsx</span> Sales <strong>Transaction</strong> Report</td>
+          <td><span class="kbd">google</span></td>
+          <td>Google Play Books partner → Reports → Sales Transactions</td>
+        </tr>
+        <tr>
+          <td>Kobo + KoboPlus</td>
+          <td><span class="kbd">.zip</span> with <span class="kbd">sales_invoice_PUB_*.xlsx</span> + <span class="kbd">sales_invoice_SUBS_*.xlsx</span></td>
+          <td><span class="kbd">kobo</span></td>
+          <td>Kobo Writing Life → Statements → monthly invoice ZIP</td>
+        </tr>
+        <tr>
+          <td>Readmoo</td>
+          <td><span class="kbd">.xlsx</span></td>
+          <td><span class="kbd">readmoo</span></td>
+          <td>Readmoo Vendor Console → Sales Report</td>
+        </tr>
+        <tr>
+          <td>KDP</td>
+          <td><span class="kbd">.xlsx</span> Combined Sales</td>
+          <td><span class="kbd">KDP</span></td>
+          <td>Amazon KDP → Reports → Royalty Report (Combined Sales)</td>
+        </tr>
+        <tr>
+          <td>HyRead</td>
+          <td><span class="kbd">.xlsx</span></td>
+          <td><span class="kbd">hyread</span></td>
+          <td>HyRead supplier portal → Statement Report</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top: 0.5rem;">
+      The tool reads only the columns it needs (see the Copies / Royalty / Aliases notes above). It tolerates fullwidth/halfwidth
+      punctuation differences (e.g. <span class="kbd">：</span> vs <span class="kbd">:</span>), case in column headers, and extra columns.
+    </p>
+
+    <h3>2. Publisher mapping CSV (recommended)</h3>
+    <p>
+      Drop into the <strong>mapping drop zone</strong>. Two columns are required: <span class="kbd">Name</span> (the canonical title)
+      and <span class="kbd">Publisher</span>. Other columns are ignored. The tool joins each report's title against
+      <span class="kbd">Name</span> using substring + alias-aware matching, then writes the matched <span class="kbd">Publisher</span>
+      into the consolidated report.
+    </p>
+    <pre>Name,Publisher
+我的前半生,義守書店
+拾荒的人 ── 香港拾荒者勞動紀實,dirty press</pre>
+    <p>
+      Without this file, the tool falls back to whatever publisher column exists in the source report (only Readmoo, HyRead, and
+      Kobo PUB carry one — Google, KoboPlus, KDP do not).
+    </p>
+
+    <h3>3. Title alias file (built-in)</h3>
+    <p>
+      The site auto-loads <span class="kbd">title-aliases.csv</span> on every page load — no upload needed. It maps common
+      presentation variants (subtitles dropped, fullwidth/halfwidth punctuation, library suffixes) to a canonical title that
+      matches your publisher mapping CSV.
+    </p>
+    <p>
+      If a book ends up in <span class="kbd">Unknown_Publisher</span> after processing, check the <strong>Audit</strong> sheet
+      of the summary XLSX for the unmapped list and either:
+    </p>
+    <ul>
+      <li>add a row to your publisher mapping CSV if it's a brand-new book, or</li>
+      <li>add a row to <span class="kbd">title-aliases.csv</span> if it's just a presentation variant of an existing canonical title.</li>
+    </ul>
+
+    <h3>4. Settings</h3>
+    <ul>
+      <li><strong>Date range label</strong> — defaults to the last 90 days (<span class="kbd">YYYY-MM-DD_to_YYYY-MM-DD</span>). Used in output filenames and report titles. Edit if you're producing a custom-period report.</li>
+      <li><strong>TWD → USD rate</strong> — defaults to a live rate fetched from <span class="kbd">open.er-api.com</span> on page load. Used to convert Readmoo <span class="kbd">總金額</span> and HyRead <span class="kbd">權利金</span>. Override with a fixed period rate from your bookkeeping if needed.</li>
+    </ul>
+
+    <h3>What you get out</h3>
+    <ul>
+      <li><strong>publisher_reports_&lt;period&gt;.zip</strong> — one CSV per publisher with per-title rows, per-platform royalty columns, totals, and payable calculation (royalty − 10% distribution fee − $5 withdrawal fee).</li>
+      <li><strong>platform_summary_&lt;period&gt;.xlsx</strong> — five sheets:
+        <ul>
+          <li>Platform Summary (with revenue pie chart)</li>
+          <li>Per-Publisher rollup</li>
+          <li>Top 20 Titles by royalty</li>
+          <li>Audit (FX rate, file list, unmapped titles)</li>
+          <li>Master Table (every transaction sorted by publisher → title → timestamp)</li>
+        </ul>
+      </li>
+    </ul>
+  </details>
 
   <!-- Libraries via CDN (works on Netlify static hosting) -->
   <!-- PapaParse for CSV -->
