@@ -279,7 +279,7 @@
 
       <div class="note">
         <strong>Royalty rules</strong><br />
-        Google: <span class="kbd">Total Publisher Earnings</span> × 0.80 (tax) ·
+        Google (Transaction Report): <span class="kbd">Payment Amount</span> × 0.80 (tax) — already USD ·
         Kobo / KoboPlus: <span class="kbd">Estimated Earnings</span> ·
         Readmoo: <span class="kbd">總金額</span> × TWD→USD rate × 0.80 (tax) ·
         HyRead: <span class="kbd">權利金</span> × TWD→USD rate × 0.80 (tax) ·
@@ -488,7 +488,7 @@
 
     const COLUMN_ALIASES = {
       title: ['書名'],
-      publisher: ['出版社'],
+      publisher: ['出版社', 'imprint name'],
       author: ['作者', 'author name'],
     };
 
@@ -587,6 +587,10 @@
         return toNumber(rowLower['estimated earnings']);
       }
       if (platform === 'google') {
+        const paymentAmount = rowLower['payment amount'];
+        if (paymentAmount != null && String(paymentAmount).trim() !== '') {
+          return toNumber(paymentAmount) * 0.8;
+        }
         return toNumber(rowLower['total publisher earnings']) * 0.8;
       }
       if (platform === 'hyread') {
