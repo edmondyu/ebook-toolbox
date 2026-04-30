@@ -1,6 +1,6 @@
 # ebook Publishing Toolbox
 
-## Version: v1.3.1
+## Version: v1.4.0
 
 Professional tools for **ebook creation, conversion, and publishing** — all processing happens **entirely in your browser**. No server uploads, no data transmission, completely privacy-friendly and secure.
 
@@ -121,14 +121,35 @@ Compress embedded images inside PDFs while preserving all text, fonts, hyperlink
 
 ### 10. Royalty Reporting (Multi-platform)
 
-Consolidate royalty reports from multiple platforms into unified summaries.
+Consolidate royalty reports from Google Play Books, Kobo, KoboPlus, Readmoo, KDP, and HyRead into unified per-publisher summaries with full transaction-level detail.
 
 **Features:**
 
-- Supports CSV and XLSX report formats
-- Per-publisher summary CSVs
-- Platform-specific sold-copy counting rules
-- ZIP download of all summaries
+- Accepts CSV, XLSX, and ZIP archives — Kobo's monthly invoice ZIPs auto-extract their inner `sales_invoice_PUB_*.xlsx` (per-purchase) and `sales_invoice_SUBS_*.xlsx` (subscription) files
+- Platform detection by filename markers (`google`, `kobo`, `readmoo`, `KDP`, `hyread`); inner ZIP filenames `_PUB_` / `_SUBS_` map to kobo / koboplus
+- Multi-sheet XLSX support — prefers a `Details` sheet over the first sheet (handles Kobo invoices that put metadata on a `Summary` sheet)
+- Platform-specific royalty derivation:
+  - Google (Transaction Report): `Payment Amount` (already USD per row, currency conversion baked in)
+  - Kobo: `Net Due (Payable Currency)` (already USD)
+  - KoboPlus: `Total in payable currency` (already USD)
+  - Readmoo: `總金額` × TWD→USD × 0.80 (tax deduction)
+  - HyRead: `權利金` × TWD→USD × 0.80 (tax deduction)
+  - KDP: `Royalty` column (already USD)
+- Live TWD→USD FX rate fetched from `open.er-api.com` on page load (manually overridable per period)
+- Optional publisher mapping CSV (`Name`, `Publisher`) with substring + alias-aware matching, fullwidth/halfwidth normalization, longest-match wins, 1-character spurious-match guard
+- Built-in static `title-aliases.csv` for cross-platform book-name variants — subtitle differences, fullwidth/halfwidth punctuation, vendor prefixes (e.g. `Dustykid -`), library suffixes (e.g. `(Overdrive: ...)`)
+- Empty-title rows skipped with on-screen warning (catches platform summary/total rows that would otherwise double-count)
+- Column-name aliasing across platforms: `Title` ← `書名` · `Publisher` ← `出版社` / `Imprint Name` / `Publisher Name` · `Author` ← `作者` / `Author Name`
+- Date-range label defaults to last 90 days, used in output filenames
+- Two outputs:
+  - **`publisher_reports_<period>.zip`** — one CSV per publisher with per-title × per-platform royalty matrix, sold copies, totals, distribution fee (10%), withdrawal fee ($5 USD), and net payable
+  - **`platform_summary_<period>.xlsx`** — five-sheet workbook:
+    1. Platform Summary with embedded revenue pie chart
+    2. Per-Publisher rollup (titles, copies, royalty, fees, payable)
+    3. Top 20 Titles by total royalty (with dominant platform per title)
+    4. Audit (FX rate + timestamp, alias entries loaded, per-input-file row counts, unmapped title list)
+    5. Master Table — every transaction record sorted by publisher → title → timestamp, with platform, copies, royalty, source file
+- In-page collapsible "How to prepare your files" operation guideline
 - Drag-and-drop UI
 
 ### 11. Extract Content from PDF
@@ -251,10 +272,12 @@ Extract metadata from EPUB and PDF files and export to CSV.
 
 **Key CDN libraries:**
 
-- JSZip — ZIP file creation
+- JSZip — ZIP creation and Kobo invoice ZIP extraction
 - PDF.js (Mozilla) — PDF rendering and text extraction
 - pdf-lib — PDF image stream surgery (PDF Compressor)
 - XLSX (SheetJS) — Excel parsing for royalty reports
+- ExcelJS — multi-sheet summary workbook with embedded image (lazy-loaded on first Process click)
+- PapaParse — CSV parsing for royalty reports and publisher / alias maps
 
 ---
 
